@@ -604,7 +604,6 @@ mod tests {
             None,
             None,
             None,
-            None,
             "Charging",
             Some(true),
         )
@@ -628,7 +627,6 @@ mod tests {
             None,
             None,
             None,
-            None,
             "Charging",
             Some(true),
         )
@@ -637,7 +635,6 @@ mod tests {
             &conn,
             Some(80.0),
             Some(75.0),
-            None,
             None,
             None,
             None,
