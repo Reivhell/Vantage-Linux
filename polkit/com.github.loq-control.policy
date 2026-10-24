@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+  "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+
+  <action id="com.github.loq-control.helper">
+    <description>LOQ Control Center hardware control</description>
+    <message>Authentication is required to modify fan control settings or switch GPU mode.</message>
+    <icon_name>preferences-system</icon_name>
+    <defaults>
+      <!-- Any user: no -->
+      <allow_any>no</allow_any>
+      <!-- Inactive console user: no -->
+      <allow_inactive>no</allow_inactive>
+      <!-- Active console user: ask for admin password, cache for session -->
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/loq-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+</policyconfig>

@@ -1,0 +1,1552 @@
+/* ==========================================================================
+   Lenovo Vantage Linux - High Fidelity Design System
+   Source of truth: Vantage Design.png & Vantage Design UI.md
+   ========================================================================== */
+
+:root {
+  /* Design Tokens */
+  --bg-app: #071525;
+  --bg-sidebar: #061321;
+  --bg-sidebar-active: #087BEA;
+  --bg-card: #0B1D30;
+  --bg-card-secondary: #10263C;
+  --bg-card-hover: #122B44;
+  --border-card: #18344F;
+  --border-card-bright: #1C4D7A;
+  
+  --primary-blue: #087BEA;
+  --bright-blue: #168CFF;
+  --electric-blue: #1A96FF;
+  --cyan: #19C9E8;
+  --teal: #21D6B2;
+  --success: #27D995;
+  --warning: #F6BD4B;
+  --error: #FF657A;
+
+  --text-primary: #EAF2FF;
+  --text-secondary: #9CB0C7;
+  --text-muted: #647D98;
+  --text-faint: #3F5770;
+
+  --radius-card: 12px;
+  --radius-sm: 8px;
+  --radius-pill: 9999px;
+
+  --font-main: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, monospace;
+  
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-main);
+  font-size: 13px;
+  line-height: 1.45;
+  user-select: none;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  outline: none;
+}
+
+a {
+  color: var(--bright-blue);
+  text-decoration: none;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* App Frame */
+.app-shell {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg-app);
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   SIDEBAR
+   ========================================================================== */
+.sidebar {
+  width: 136px;
+  min-width: 136px;
+  max-width: 136px;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border-card);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 16px 10px 14px 10px;
+  z-index: 20;
+}
+
+.brand-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px 16px 6px;
+}
+
+.brand-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, #168CFF 0%, #087BEA 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 10px rgba(8, 123, 234, 0.45);
+  flex-shrink: 0;
+}
+
+.brand-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: #FFFFFF;
+}
+
+.brand-title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--text-primary);
+}
+
+.nav-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  position: relative;
+  text-align: left;
+}
+
+.nav-item svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 2;
+  flex-shrink: 0;
+  transition: stroke 0.15s ease;
+}
+
+.nav-item:hover {
+  color: var(--text-secondary);
+  background: rgba(24, 52, 79, 0.35);
+}
+
+.nav-item.active {
+  background: linear-gradient(90deg, #087BEA 0%, #168CFF 100%);
+  color: #FFFFFF;
+  font-weight: 600;
+  box-shadow: 0 2px 10px rgba(8, 123, 234, 0.35);
+}
+
+.nav-item.active svg {
+  stroke: #FFFFFF;
+}
+
+/* Sidebar Footer */
+.sidebar-footer {
+  padding-top: 12px;
+  border-top: 1px solid rgba(24, 52, 79, 0.4);
+}
+
+.device-badge {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px;
+}
+
+.device-badge-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.device-badge-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.device-model-name {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 1.2;
+}
+
+.device-conn-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--success);
+}
+
+.status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+  animation: pulse-dot 2.5s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.15); }
+}
+
+/* ==========================================================================
+   MAIN CONTENT & HEADER
+   ========================================================================== */
+.main-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-app);
+}
+
+/* Window Chrome Top Header */
+.topbar {
+  height: 48px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: transparent;
+  user-select: none;
+  z-index: 10;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.window-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.win-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: all 0.15s ease;
+}
+
+.win-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.win-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.win-btn.close:hover {
+  background: var(--error);
+  color: #FFFFFF;
+}
+
+.notif-btn {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: all 0.15s ease;
+}
+
+.notif-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.notif-btn svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.notif-dot {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--bright-blue);
+  box-shadow: 0 0 6px var(--bright-blue);
+}
+
+/* Content Area */
+.content-area {
+  flex: 1;
+  padding: 0 28px 24px 28px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.content-area::-webkit-scrollbar {
+  width: 6px;
+}
+.content-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+.content-area::-webkit-scrollbar-thumb {
+  background: var(--border-card);
+  border-radius: 3px;
+}
+.content-area::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Screen Title Header */
+.screen-header {
+  margin-bottom: 18px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.screen-header-left h1 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.screen-header-left p {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.screen-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Panel groups */
+.panel-group {
+  display: none;
+  animation: fadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.panel-group.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   CARDS & COMMON COMPONENTS
+   ========================================================================== */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-card);
+  padding: 16px;
+  position: relative;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.card.secondary {
+  background: var(--bg-card-secondary);
+}
+
+.card:hover {
+  border-color: var(--border-card-bright);
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Buttons */
+.btn-primary {
+  background: var(--primary-blue);
+  color: #FFFFFF;
+  padding: 8px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(8, 123, 234, 0.35);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.btn-primary:hover {
+  background: var(--bright-blue);
+  box-shadow: 0 4px 14px rgba(22, 140, 255, 0.45);
+}
+
+.btn-primary:active {
+  transform: translateY(1px);
+}
+
+.btn-secondary {
+  background: var(--bg-card-secondary);
+  border: 1px solid var(--border-card);
+  color: var(--text-primary);
+  padding: 8px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.btn-secondary:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-card-bright);
+}
+
+/* Segmented Buttons / Pills */
+.segmented-pills {
+  display: inline-flex;
+  background: #081626;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+
+.seg-pill {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: all 0.15s ease;
+}
+
+.seg-pill:hover {
+  color: var(--text-secondary);
+}
+
+.seg-pill.active {
+  background: var(--primary-blue);
+  color: #FFFFFF;
+  font-weight: 600;
+  box-shadow: 0 1px 6px rgba(8, 123, 234, 0.35);
+}
+
+/* Custom iOS/Material Switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #12283E;
+  border: 1px solid var(--border-card);
+  border-radius: 24px;
+  transition: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 2px;
+  bottom: 2px;
+  background-color: #9CB0C7;
+  border-radius: 50%;
+  transition: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+input:checked + .slider {
+  background-color: var(--primary-blue);
+  border-color: var(--bright-blue);
+  box-shadow: 0 0 10px rgba(8, 123, 234, 0.4);
+}
+
+input:checked + .slider:before {
+  transform: translateX(18px);
+  background-color: #FFFFFF;
+}
+
+/* ==========================================================================
+   SCREEN 1: HOME DASHBOARD
+   ========================================================================== */
+.featured-banner {
+  background: linear-gradient(135deg, #092c55 0%, #0d4880 50%, #071c35 100%);
+  border: 1px solid rgba(22, 140, 255, 0.3);
+  border-radius: var(--radius-card);
+  padding: 22px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 6px 20px rgba(7, 21, 37, 0.5);
+}
+
+.featured-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  z-index: 2;
+}
+
+.mode-badge-circle {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  border: 2px solid var(--teal);
+  background: radial-gradient(circle, rgba(33, 214, 178, 0.15) 0%, rgba(11, 29, 48, 0.6) 70%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 18px rgba(33, 214, 178, 0.35);
+  flex-shrink: 0;
+}
+
+.mode-badge-circle svg {
+  width: 32px;
+  height: 32px;
+  stroke: var(--teal);
+  stroke-width: 2;
+}
+
+.mode-info-block {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mode-info-tag {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--cyan);
+  text-transform: capitalize;
+}
+
+.mode-info-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: -0.4px;
+  line-height: 1.15;
+}
+
+.mode-info-desc {
+  font-size: 12px;
+  color: #B4C6DC;
+  margin-bottom: 8px;
+}
+
+.featured-banner-right {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+}
+
+.featured-laptop-img {
+  width: 290px;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 8px;
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.6));
+  mask-image: radial-gradient(circle at 60% 50%, black 70%, transparent 100%);
+  -webkit-mask-image: radial-gradient(circle at 60% 50%, black 70%, transparent 100%);
+}
+
+/* Metrics Row (4 columns) */
+.metrics-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.metric-card {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.metric-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.metric-value-big {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+
+.metric-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.sparkline-svg {
+  width: 100%;
+  height: 32px;
+  overflow: visible;
+}
+
+.sparkline-path {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sparkline-fill {
+  fill: url(#cyanGradient);
+  opacity: 0.25;
+}
+
+/* Battery Capsule on Home Screen */
+.battery-capsule-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.battery-capsule {
+  width: 46px;
+  height: 22px;
+  border-radius: 12px;
+  background: rgba(39, 217, 149, 0.15);
+  border: 1.5px solid var(--success);
+  padding: 2px;
+  display: flex;
+  align-items: center;
+}
+
+.battery-capsule-fill {
+  height: 100%;
+  width: 78%;
+  background: var(--success);
+  border-radius: 9px;
+  box-shadow: 0 0 8px rgba(39, 217, 149, 0.6);
+  transition: width 0.3s ease;
+}
+
+/* Lower 3 Status Cards */
+.status-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.stat-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 6px 0;
+}
+
+.stat-item-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.stat-col-lbl {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.stat-col-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.network-stat-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+}
+
+.network-status-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--success);
+  margin-top: 2px;
+}
+
+.network-wifi-icon {
+  width: 24px;
+  height: 24px;
+  color: var(--bright-blue);
+}
+
+/* ==========================================================================
+   SCREEN 2: PERFORMANCE ("Mode Performa")
+   ========================================================================== */
+.profiles-row-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.profile-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-card);
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.profile-card:hover {
+  border-color: var(--border-card-bright);
+  background: var(--bg-card-hover);
+}
+
+.profile-card.active {
+  border: 2px solid var(--bright-blue);
+  background: linear-gradient(180deg, rgba(22, 140, 255, 0.16) 0%, #0B1D30 100%);
+  box-shadow: 0 0 16px rgba(22, 140, 255, 0.25);
+}
+
+.profile-icon-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(24, 52, 79, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.profile-card.active .profile-icon-wrap {
+  background: var(--primary-blue);
+  color: #FFFFFF;
+  box-shadow: 0 2px 10px rgba(8, 123, 234, 0.4);
+}
+
+.profile-icon-wrap svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.profile-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.profile-desc {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* Nav rows list (Pengaturan Tambahan) */
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.setting-row-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-card);
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.setting-row-card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-card-bright);
+}
+
+.setting-row-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.setting-icon-box {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(24, 52, 79, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+.setting-icon-box svg {
+  width: 17px;
+  height: 17px;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.setting-label-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.setting-row-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.setting-value-badge {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.chevron-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
+   SCREEN 3: BATTERY ("Battery")
+   ========================================================================== */
+.battery-top-card {
+  display: flex;
+  align-items: center;
+  gap: 36px;
+  padding: 22px 28px;
+  margin-bottom: 20px;
+}
+
+.battery-circle-gauge-wrap {
+  width: 140px;
+  height: 140px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.gauge-svg {
+  width: 140px;
+  height: 140px;
+  transform: rotate(-90deg);
+}
+
+.gauge-bg-ring {
+  fill: none;
+  stroke: #10263C;
+  stroke-width: 10;
+}
+
+.gauge-progress-ring {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gauge-center-content {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.gauge-center-pct {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.gauge-center-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.battery-info-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.battery-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(24, 52, 79, 0.4);
+  padding-bottom: 8px;
+}
+
+.battery-info-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.battery-info-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.battery-info-label svg {
+  width: 15px;
+  height: 15px;
+  color: var(--text-muted);
+}
+
+.battery-info-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.battery-bottom-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 16px;
+}
+
+.chart-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.chart-canvas-wrap {
+  width: 100%;
+  height: 160px;
+  position: relative;
+}
+
+.chart-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.chart-grid-line {
+  stroke: rgba(24, 52, 79, 0.4);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.chart-axis-label {
+  font-size: 9.5px;
+  fill: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.charging-setting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(24, 52, 79, 0.4);
+}
+
+.charging-setting-item:last-child {
+  border-bottom: none;
+}
+
+.charging-setting-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.charging-setting-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.charging-setting-val {
+  font-size: 11px;
+  color: var(--cyan);
+}
+
+/* ==========================================================================
+   SCREEN 4: SYSTEM TEMPERATURE ("System Temperature")
+   ========================================================================== */
+.temp-gauges-row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.temp-gauge-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.temp-gauge-ring-box {
+  width: 100px;
+  height: 100px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.temp-gauge-ring-box .gauge-svg {
+  width: 100px;
+  height: 100px;
+}
+
+.temp-val-center {
+  position: absolute;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.temp-label-bottom {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.status-badge-pill {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(39, 217, 149, 0.15);
+  color: var(--success);
+}
+
+.chart-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 4px;
+}
+
+/* ==========================================================================
+   SCREEN 5: GPU SETTINGS ("Pengaturan GPU")
+   ========================================================================== */
+.gpu-status-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.gpu-card-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.gpu-stat-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px;
+  background: var(--bg-card-secondary);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(24, 52, 79, 0.3);
+}
+
+.gpu-stat-num {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.gpu-stat-lbl {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.gpu-mode-card {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   SCREEN 6: FAN CONTROL ("Kontrol Kipas")
+   ========================================================================== */
+.fan-modes-wrap {
+  margin-bottom: 20px;
+}
+
+.fan-gauges-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.fan-gauge-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 22px 16px;
+  text-align: center;
+}
+
+.fan-gauge-ring-box {
+  width: 120px;
+  height: 120px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.fan-gauge-ring-box .gauge-svg {
+  width: 120px;
+  height: 120px;
+}
+
+.fan-val-center {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.fan-rpm-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+
+.fan-label-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.badge-fan-mode {
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(22, 140, 255, 0.15);
+  color: var(--bright-blue);
+  border: 1px solid rgba(22, 140, 255, 0.3);
+}
+
+.fan-curve-canvas {
+  width: 100%;
+  height: 180px;
+  position: relative;
+}
+
+/* ==========================================================================
+   SCREEN 7: DEVICE SETTINGS ("Pengaturan Perangkat")
+   ========================================================================== */
+.device-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.device-setting-row {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-card);
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.15s ease;
+}
+
+.device-setting-row:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-card-bright);
+}
+
+/* ==========================================================================
+   SCREEN 8: DIAGNOSTICS ("Diagnostik & Pemindaian")
+   ========================================================================== */
+.scan-action-card {
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.scan-top-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.scan-timestamp-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.scan-timestamp-info svg {
+  width: 16px;
+  height: 16px;
+  color: var(--success);
+}
+
+.scan-progress-bar-wrap {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-card-secondary);
+  border-radius: 3px;
+  overflow: hidden;
+  display: none;
+}
+
+.scan-progress-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #087BEA, #19C9E8);
+  transition: width 0.2s ease;
+}
+
+.diag-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.diag-result-row {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-card);
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.diag-row-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.diag-row-left svg {
+  width: 16px;
+  height: 16px;
+  color: var(--success);
+}
+
+.diag-status-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--success);
+}
+
+/* ==========================================================================
+   SCREEN 9: SETTINGS ("Pengaturan")
+   ========================================================================== */
+.settings-subtabs {
+  margin-bottom: 20px;
+}
+
+.settings-group-card {
+  margin-bottom: 18px;
+}
+
+.settings-field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(24, 52, 79, 0.4);
+}
+
+.settings-field-row:last-child {
+  border-bottom: none;
+}
+
+.settings-field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.settings-select {
+  background: var(--bg-card-secondary);
+  border: 1px solid var(--border-card);
+  color: var(--text-primary);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+}
+
+/* Toast Alert Notification */
+.toast-notice {
+  position: fixed;
+  bottom: 24px;
+  right: 28px;
+  background: #0d2847;
+  border: 1px solid var(--bright-blue);
+  color: #FFFFFF;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toast-notice.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.toast-notice.err {
+  background: #3d141c;
+  border-color: var(--error);
+}
+
+/* Modal Dialog */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.modal-overlay.active {
+  display: flex;
+}
+
+.modal-box {
+  width: 520px;
+  max-width: 90vw;
+  max-height: 85vh;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card-bright);
+  border-radius: var(--radius-card);
+  padding: 24px;
+  overflow-y: auto;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8);
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 14px;
+  color: var(--text-primary);
+}
+
+/* Responsive adjustments */
+@media (max-width: 1050px) {
+  .metrics-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .status-grid-3 {
+    grid-template-columns: 1fr;
+  }
+  .profiles-row-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .temp-gauges-row-3 {
+    grid-template-columns: 1fr;
+  }
+  .battery-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+}

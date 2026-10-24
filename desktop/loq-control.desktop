@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=LOQ Control Center
+GenericName=Laptop Control Center
+Comment=Monitor and control your Lenovo LOQ/Legion on Linux
+Exec=/usr/local/bin/loq-control
+Icon=loq-control
+Terminal=false
+Categories=System;Monitor;HardwareSettings;
+Keywords=lenovo;legion;loq;fan;gpu;cpu;monitor;power;
+StartupNotify=false
+StartupWMClass=LOQ Control Center

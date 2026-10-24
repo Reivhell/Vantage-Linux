@@ -1,0 +1,17 @@
+[Unit]
+Description=LOQ Control Center
+Documentation=https://github.com/loq-control
+After=graphical-session.target network.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/loq-control
+Restart=on-failure
+RestartSec=5
+# Avoid restart loops if GPU is not present
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
+[Install]
+WantedBy=graphical-session.target
