@@ -1,159 +1,76 @@
 // Screen 6: Fan Control ("Kontrol Kipas")
 import { $, invoke, run, toast } from "./core.js";
 
-let currentFanCurve = [
-  { temp: 0, pwm: 0 },
-  { temp: 40, pwm: 0 },
-  { temp: 60, pwm: 45 },
-  { temp: 80, pwm: 75 },
-  { temp: 100, pwm: 100 },
-];
+let fanInfo = null;
 
-let activeFanMode = "auto";
+function setRing(id, rpm, available) {
+  const ring = $(id);
+  if (!ring) return;
+  const c = 264;
+  const pct = available && Number.isFinite(rpm) ? Math.min(100, Math.max(0, (rpm / 5000) * 100)) : 0;
+  ring.style.strokeDasharray = `${c}`;
+  ring.style.strokeDashoffset = `${c - (pct / 100) * c}`;
+}
+
+function paintRpm(stats) {
+  if (!stats) return;
+  const f1 = stats.fan1_available ? stats.fan1_rpm : null;
+  const f2 = stats.fan2_available ? stats.fan2_rpm : null;
+  if ($("fan-cpu-rpm")) $("fan-cpu-rpm").textContent = f1 === null || f1 === undefined ? "N/A" : `${f1} RPM`;
+  if ($("fan-gpu-rpm")) $("fan-gpu-rpm").textContent = f2 === null || f2 === undefined ? "N/A" : `${f2} RPM`;
+  setRing("ring-fan-cpu", f1, stats.fan1_available);
+  setRing("ring-fan-gpu", f2, stats.fan2_available);
+  if ($("fan-card-cpu")) $("fan-card-cpu").style.display = stats.fan1_available ? "" : "none";
+  if ($("fan-card-gpu")) $("fan-card-gpu").style.display = stats.fan2_available ? "" : "none";
+}
+
+function paintMode(status) {
+  const label = status?.mode_label || "Tidak tersedia";
+  if ($("badge-fan-cpu-mode")) $("badge-fan-cpu-mode").textContent = label;
+  if ($("badge-fan-gpu-mode")) $("badge-fan-gpu-mode").textContent = label;
+
+  document.querySelectorAll("#fan-modes-pills button").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.fanMode === status?.mode);
+    btn.disabled = !status?.mode_control;
+  });
+
+  if ($("fan-unavailable-note")) {
+    $("fan-unavailable-note").style.display = status?.available ? "none" : "block";
+  }
+}
 
 export async function loadFan() {
   try {
-    const [info, stats] = await Promise.all([
+    const [info, status, stats] = await Promise.all([
       invoke("cmd_get_fan_info"),
+      invoke("cmd_fan_status"),
       invoke("cmd_get_stats_snapshot"),
     ]);
-
-    if (info && info.default_curve && info.default_curve.length) {
-      currentFanCurve = info.default_curve.map((p) => ({ ...p }));
-    }
-
-    if (stats) {
-      const rpm1 = stats.fan1_rpm ? `${stats.fan1_rpm} RPM` : "1200 RPM";
-      const rpm2 = stats.fan2_rpm ? `${stats.fan2_rpm} RPM` : "1100 RPM";
-      if ($("fan-cpu-rpm")) $("fan-cpu-rpm").textContent = rpm1;
-      if ($("fan-gpu-rpm")) $("fan-gpu-rpm").textContent = rpm2;
-
-      // Update circular rings
-      const c = 264;
-      const setRing = (id, rpm) => {
-        const ring = $(id);
-        if (!ring) return;
-        const pct = Math.min(100, Math.max(0, (rpm / 4500) * 100));
-        const offset = c - (pct / 100) * c;
-        ring.style.strokeDasharray = `${c}`;
-        ring.style.strokeDashoffset = `${offset}`;
-      };
-      setRing("ring-fan-cpu", stats.fan1_rpm || 1200);
-      setRing("ring-fan-gpu", stats.fan2_rpm || 1100);
-    }
-
-    renderFanCurveChart();
+    fanInfo = info;
+    paintRpm(stats);
+    paintMode(status);
   } catch (err) {
     console.error("loadFan error:", err);
   }
 }
 
-function renderFanCurveChart() {
-  const line = $("fan-curve-line");
-  const svg = $("fan-curve-editor-svg");
-  if (!line || !svg) return;
-
-  // Chart range: X [45 (0°C) to 450 (100°C)], Y [130 (0%) to 25 (100%)]
-  const points = currentFanCurve.map((pt) => {
-    const x = 45 + (Math.min(100, Math.max(0, pt.temp)) / 100) * 405;
-    const y = 130 - (Math.min(100, Math.max(0, pt.pwm)) / 100) * 105;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-
-  line.setAttribute("points", points.join(" "));
-
-  // Update control point circles
-  const circles = svg.querySelectorAll("circle.curve-pt");
-  currentFanCurve.forEach((pt, i) => {
-    if (circles[i]) {
-      const x = 45 + (Math.min(100, Math.max(0, pt.temp)) / 100) * 405;
-      const y = 130 - (Math.min(100, Math.max(0, pt.pwm)) / 100) * 105;
-      circles[i].setAttribute("cx", x);
-      circles[i].setAttribute("cy", y);
-    }
-  });
+export function updateFanLive(stats) {
+  paintRpm(stats);
 }
 
 export function initFan() {
-  // Operating Mode Segmented Pills
   document.querySelectorAll("#fan-modes-pills button").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      document.querySelectorAll("#fan-modes-pills button").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      activeFanMode = btn.dataset.fanMode;
-
-      const badgeCpu = $("badge-fan-cpu-mode");
-      const badgeGpu = $("badge-fan-gpu-mode");
-      const label = activeFanMode.charAt(0).toUpperCase() + activeFanMode.slice(1);
-      if (badgeCpu) badgeCpu.textContent = label;
-      if (badgeGpu) badgeGpu.textContent = label;
-
-      if (activeFanMode === "auto") {
-        await run("cmd_fan_auto", { fan_id: 0 });
-        toast("Mode kipas: Auto");
-      } else if (activeFanMode === "silent") {
-        await run("cmd_apply_fan_profile", { profile: "quiet", fan_id: 1 });
-        await run("cmd_apply_fan_profile", { profile: "quiet", fan_id: 2 });
-        toast("Mode kipas: Silent");
-      } else if (activeFanMode === "performance") {
-        await run("cmd_apply_fan_profile", { profile: "full", fan_id: 1 });
-        await run("cmd_apply_fan_profile", { profile: "full", fan_id: 2 });
-        toast("Mode kipas: Performance");
-      } else {
-        toast("Mode kipas: Custom (kurva manual)");
+      const mode = btn.dataset.fanMode;
+      if (!mode || !fanInfo?.mode_control) {
+        toast("Kontrol mode kipas tidak tersedia pada firmware ini.", true);
+        return;
+      }
+      const res = await run("cmd_set_fan_mode", { mode });
+      if (res) {
+        toast(`Mode kipas: ${btn.textContent.trim()}`);
+        await loadFan();
       }
     });
-  });
-
-  // Curve points interactivity (drag or click adjustments)
-  const svg = $("fan-curve-editor-svg");
-  if (svg) {
-    let activeDragIdx = -1;
-
-    svg.querySelectorAll("circle.curve-pt").forEach((circle, idx) => {
-      circle.addEventListener("mousedown", (e) => {
-        activeDragIdx = idx;
-        e.preventDefault();
-      });
-    });
-
-    window.addEventListener("mousemove", (e) => {
-      if (activeDragIdx < 0) return;
-      const rect = svg.getBoundingClientRect();
-      const mouseY = e.clientY - rect.top;
-      // Invert Y mapping to PWM percentage
-      const pwmPct = Math.round(Math.max(0, Math.min(100, (1 - (mouseY - 25) / 105) * 100)));
-      if (currentFanCurve[activeDragIdx]) {
-        currentFanCurve[activeDragIdx].pwm = pwmPct;
-        renderFanCurveChart();
-      }
-    });
-
-    window.addEventListener("mouseup", () => {
-      activeDragIdx = -1;
-    });
-  }
-
-  // Reset to default
-  $("btn-fan-reset")?.addEventListener("click", () => {
-    currentFanCurve = [
-      { temp: 0, pwm: 0 },
-      { temp: 40, pwm: 0 },
-      { temp: 60, pwm: 45 },
-      { temp: 80, pwm: 75 },
-      { temp: 100, pwm: 100 },
-    ];
-    renderFanCurveChart();
-    toast("Kurva kipas dikembalikan ke bawaan.");
-  });
-
-  // Apply curve
-  $("btn-fan-apply")?.addEventListener("click", async () => {
-    const cmd = {
-      fan_id: 1,
-      points: currentFanCurve,
-    };
-    const res = await run("cmd_apply_fan_curve", { cmd });
-    if (res) toast("Kurva kipas kustom berhasil diterapkan.");
   });
 }

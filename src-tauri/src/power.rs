@@ -34,7 +34,7 @@ fn run_helper_inner(subcmd: &str, args: &[&str], allow_pkexec: bool) -> SimpleRe
     if !Path::new(HELPER_PATH).is_file() {
         return SimpleResult {
             ok: false,
-            message: "loq-helper is not installed (run scripts/install.sh)".into(),
+            message: "vantage-helper is not installed (run scripts/install.sh)".into(),
         };
     }
 

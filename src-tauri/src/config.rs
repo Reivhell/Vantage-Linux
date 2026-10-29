@@ -2,10 +2,10 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 
-pub(crate) const CONFIG_DIR: &str = ".config/loq-control";
-pub(crate) const HELPER_PATH: &str = "/usr/local/bin/loq-helper";
+pub(crate) const CONFIG_DIR: &str = ".config/vantage-linux";
+pub(crate) const HELPER_PATH: &str = "/usr/local/bin/vantage-helper";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {

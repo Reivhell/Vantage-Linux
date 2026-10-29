@@ -15,24 +15,30 @@ export async function loadGpu() {
 
     // Mode GPU Title & description
     if (modeInfo) {
-      if ($("gpu-cur-mode-title")) $("gpu-cur-mode-title").textContent = modeInfo.mode_label || "Hybrid Mode (disarankan)";
+      if ($("gpu-cur-mode-title")) $("gpu-cur-mode-title").textContent = modeInfo.mode_label || "--";
     }
 
     // Intel iGPU Stats
     if (stats) {
-      if ($("gpu-i-util")) $("gpu-i-util").textContent = stats.view?.igpu_percent || "0%";
-      if ($("gpu-i-temp")) $("gpu-i-temp").textContent = stats.temp_cpu ? `${stats.temp_cpu}°C` : "48°C";
-      if ($("gpu-i-vram")) $("gpu-i-vram").textContent = "0 MB";
+      if ($("gpu-i-util")) {
+        $("gpu-i-util").textContent =
+          stats.igpu_util === null || stats.igpu_util === undefined ? "--" : `${Math.round(stats.igpu_util)}%`;
+      }
+      if ($("gpu-i-temp")) $("gpu-i-temp").textContent = "--";
+      if ($("gpu-i-vram")) $("gpu-i-vram").textContent = "--";
 
       // NVIDIA dGPU Stats
-      if ($("gpu-d-util")) $("gpu-d-util").textContent = stats.view?.gpu_percent || `${Math.round(stats.gpu_percent || 8)}%`;
-      if ($("gpu-d-temp")) $("gpu-d-temp").textContent = stats.temp_gpu ? `${stats.temp_gpu}°C` : (stats.view?.gpu_temp || "42°C");
-      if ($("gpu-d-vram")) $("gpu-d-vram").textContent = stats.view?.gpu_vram || "512 MB";
+      if ($("gpu-d-util")) {
+        $("gpu-d-util").textContent =
+          stats.gpu_util === null || stats.gpu_util === undefined ? "--" : `${stats.gpu_util}%`;
+      }
+      if ($("gpu-d-temp")) $("gpu-d-temp").textContent = stats.view?.gpu_temp || "--";
+      if ($("gpu-d-vram")) $("gpu-d-vram").textContent = stats.view?.gpu_vram || "--";
     }
 
     if (details) {
       if ($("gpu-nvidia-card-title")) {
-        $("gpu-nvidia-card-title").textContent = details.name ? details.name.replace("NVIDIA ", "") : "NVIDIA GeForce RTX";
+        $("gpu-nvidia-card-title").textContent = details.name ? details.name.replace("NVIDIA ", "") : "GPU Diskret";
       }
       if ($("switch-gpu-pm")) {
         $("switch-gpu-pm").checked = details.runtime_control !== "on";
@@ -120,15 +126,15 @@ export function initGpu() {
   $("row-gpu-power")?.addEventListener("click", async () => {
     try {
       const details = await invoke("cmd_get_gpu_details");
-      const watts = details?.power_w ? `${details.power_w.toFixed(1)} W` : "25 W";
-      const limit = details?.power_limit_w ? `${details.power_limit_w} W` : "95 W";
+      const watts = details?.power_w !== null && details?.power_w !== undefined ? `${details.power_w.toFixed(1)} W` : "--";
+      const limit = details?.power_limit_w !== null && details?.power_limit_w !== undefined ? `${details.power_limit_w} W` : "--";
 
       showModal(
         "Penggunaan Daya NVIDIA",
         `<div style="display: flex; flex-direction: column; gap: 12px;">
            <div style="display: flex; justify-content: space-between;"><span>Konsumsi Daya Saat Ini</span><strong class="mono" style="color: var(--cyan);">${watts}</strong></div>
            <div style="display: flex; justify-content: space-between;"><span>Batas Daya (TGP Limit)</span><strong class="mono" style="color: var(--text-primary);">${limit}</strong></div>
-           <div style="display: flex; justify-content: space-between;"><span>Suhu GPU</span><strong class="mono">${details?.temperature_c || 42}°C</strong></div>
+           <div style="display: flex; justify-content: space-between;"><span>Suhu GPU</span><strong class="mono">${details?.temperature_c !== null && details?.temperature_c !== undefined ? `${details.temperature_c}°C` : "--"}</strong></div>
          </div>`,
         null
       );

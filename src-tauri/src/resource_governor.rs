@@ -1,23 +1,20 @@
 use crate::config::home_dir;
-use crate::error::AppResult;
 use crate::gpu_ext;
 use crate::power;
 use crate::resource_types::*;
 use crate::stats::read_cpu_temp;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 
 /// Titik deteksi pelanggaran ambang (untuk hysteresis).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BreachState {
     Clear,
-    Warn,
     Critical,
 }
 
@@ -354,7 +351,7 @@ impl RuleEngine {
                     false
                 }
             }
-            BreachState::Warn | BreachState::Critical => {
+            BreachState::Critical => {
                 if value <= t.warn {
                     *currently = BreachState::Clear;
                     false
@@ -411,33 +408,21 @@ impl ActionExecutor {
         }
     }
 
-    fn dispatch(&self, action: &Action) -> AppResult<()> {
+    fn dispatch(&self, action: &Action) -> Result<(), String> {
         match action {
             Action::SetThermalMode { mode } => {
                 if !power::set_thermal_mode(mode).ok {
-                    return Err(crate::error::AppError::HelperFailed {
-                        subcommand: "thermal-mode".into(),
-                        exit: None,
-                        stderr: String::new(),
-                    });
+                    return Err("helper 'thermal-mode' failed".into());
                 }
             }
             Action::SetGpuPowerLimit { watts } => {
                 if !gpu_ext::set_power_limit(*watts).ok {
-                    return Err(crate::error::AppError::HelperFailed {
-                        subcommand: "gpu-power-limit".into(),
-                        exit: None,
-                        stderr: String::new(),
-                    });
+                    return Err("helper 'gpu-power-limit' failed".into());
                 }
             }
             Action::SetGpuRuntimePm { control } => {
                 if !gpu_ext::set_runtime_pm(control).ok {
-                    return Err(crate::error::AppError::HelperFailed {
-                        subcommand: "gpu-runtime-pm".into(),
-                        exit: None,
-                        stderr: String::new(),
-                    });
+                    return Err("helper 'gpu-runtime-pm' failed".into());
                 }
             }
             Action::SetFanCurve { fan_id, points_json } => {
@@ -446,11 +431,7 @@ impl ActionExecutor {
                     &[fan_id.to_string().as_str(), points_json.as_str()],
                 );
                 if !res.ok {
-                    return Err(crate::error::AppError::HelperFailed {
-                        subcommand: "fan-curve".into(),
-                        exit: None,
-                        stderr: res.message,
-                    });
+                    return Err(format!("helper 'fan-curve' failed: {}", res.message));
                 }
             }
             Action::SetFanManual { fan_id, pwm_percent } => {
@@ -459,44 +440,25 @@ impl ActionExecutor {
                     &[fan_id.to_string().as_str(), pwm_percent.to_string().as_str()],
                 );
                 if !res.ok {
-                    return Err(crate::error::AppError::HelperFailed {
-                        subcommand: "fan-manual".into(),
-                        exit: None,
-                        stderr: res.message,
-                    });
+                    return Err(format!("helper 'fan-manual' failed: {}", res.message));
                 }
             }
             Action::SetFanAuto { fan_id } => {
                 let res = power::run_helper("fan-auto", &[fan_id.to_string().as_str()]);
                 if !res.ok {
-                    return Err(crate::error::AppError::HelperFailed {
-                        subcommand: "fan-auto".into(),
-                        exit: None,
-                        stderr: res.message,
-                    });
+                    return Err(format!("helper 'fan-auto' failed: {}", res.message));
                 }
             }
             Action::Renice { pid, nice } => {
                 if *pid <= 1 {
-                    return Err(crate::error::AppError::InvalidInput {
-                        field: "pid".into(),
-                        reason: "refusing to renice PID 1 or below".into(),
-                    });
+                    return Err("refusing to renice PID 1 or below".into());
                 }
                 let status = std::process::Command::new("renice")
                     .args([nice.to_string().as_str(), "-p", pid.to_string().as_str()])
                     .status()
-                    .map_err(|e| crate::error::AppError::Io {
-                        op: "renice".into(),
-                        path: None,
-                        source: e.to_string(),
-                    })?;
+                    .map_err(|e| format!("renice: {e}"))?;
                 if !status.success() {
-                    return Err(crate::error::AppError::HelperFailed {
-                        subcommand: "renice".into(),
-                        exit: status.code(),
-                        stderr: String::new(),
-                    });
+                    return Err(format!("helper 'renice' failed (exit {:?})", status.code()));
                 }
             }
             Action::Notify { title, body } => {
@@ -575,7 +537,7 @@ impl ResourceGovernor {
     }
 
     fn rules_path() -> PathBuf {
-        home_dir().join(".config/loq-control/resource_rules.json")
+        home_dir().join(".config/vantage-linux/resource_rules.json")
     }
 
     /// Muat aturan dari berkas, atau bawaan jika berkas belum ada.

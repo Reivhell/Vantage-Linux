@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# LOQ Control Center (Rust + Tauri) — Uninstall wrapper
+# Vantage Linux (Rust + Tauri) — Uninstall wrapper
 #
 # Usage:
 #   sudo ./scripts/uninstall.sh               remove the app and all program data
@@ -7,7 +7,8 @@
 #
 # The actual uninstall logic lives in install.sh so the installer, updater and
 # uninstaller share the same service, path and confirmation handling. Only files
-# owned by LOQ Control Center are removed; system packages and drivers are not.
+# owned by Vantage Linux (and pre-rebrand loq-control leftovers) are removed;
+# system packages and drivers are not.
 
 set -euo pipefail
 

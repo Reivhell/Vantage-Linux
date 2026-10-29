@@ -1,12 +1,12 @@
 [Unit]
-Description=LOQ Control Center
-Documentation=https://github.com/loq-control
+Description=Vantage Linux
+Documentation=https://github.com/Reivhell/Vantage-Linux
 After=graphical-session.target network.target
 PartOf=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/loq-control
+ExecStart=/usr/local/bin/vantage-linux
 Restart=on-failure
 RestartSec=5
 # Avoid restart loops if GPU is not present

@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DisplayMode {
@@ -957,10 +957,6 @@ pub fn read_display_info_cached() -> DisplayInfo {
 pub fn invalidate_display_cache() {
     let mut guard = display_info_cache().lock().unwrap();
     guard.info = None;
-}
-
-pub fn read_display_info() -> DisplayInfo {
-    read_display_info_inner()
 }
 
 fn read_display_info_inner() -> DisplayInfo {

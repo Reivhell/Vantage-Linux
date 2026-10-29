@@ -71,6 +71,7 @@ impl HistoryStore {
 
     /// Ambil poin dalam window waktu (detik).
     pub fn get_window(&self, metric: &str, window_seconds: f64) -> MetricSeries {
+        const MAX_WINDOW_POINTS: usize = 600;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -81,11 +82,26 @@ impl HistoryStore {
             Some(s) => s,
             None => return MetricSeries { points: Vec::new() },
         };
-        let points: Vec<HistoryPoint> = series
+        let mut points: Vec<HistoryPoint> = series
             .iter()
             .filter(|p| p.timestamp >= cutoff)
             .cloned()
             .collect();
+
+        // Grafik hanya butuh ~600 titik. Downsample supaya window 24h tidak
+        // mengirim puluhan ribu titik ke frontend setiap kali tab dibuka.
+        let len = points.len();
+        let step = (len + MAX_WINDOW_POINTS - 1) / MAX_WINDOW_POINTS;
+        if step > 1 {
+            let mut sampled = Vec::with_capacity(len / step + 1);
+            let mut iter = points.into_iter().enumerate().peekable();
+            while let Some((index, point)) = iter.next() {
+                if index % step == 0 || iter.peek().is_none() {
+                    sampled.push(point);
+                }
+            }
+            points = sampled;
+        }
         MetricSeries { points }
     }
 }
@@ -159,5 +175,16 @@ mod tests {
         let store = HistoryStore::new(3600.0);
         let series = store.get_window("nonexistent", 60.0);
         assert!(series.points.is_empty());
+    }
+
+    #[test]
+    fn test_window_downsamples_large_series() {
+        let store = HistoryStore::new(3600.0);
+        for value in 0..2000 {
+            store.push("temp", value as f64);
+        }
+        let series = store.get_window("temp", 3600.0);
+        assert!(series.points.len() <= 601);
+        assert!(series.points.len() > 400);
     }
 }

@@ -1,5 +1,5 @@
 // Screen 9: Settings ("Pengaturan")
-import { $, invoke, run, toast, showModal } from "./core.js";
+import { $, invoke, run, toast, showModal, setLocale, applyI18n } from "./core.js";
 
 export async function loadSettings() {
   try {
@@ -15,9 +15,9 @@ export async function loadSettings() {
 
     if (dev) {
       const model = [dev.vendor, dev.product, dev.version].filter(Boolean).join(" ");
-      if ($("about-device-model")) $("about-device-model").textContent = model || "Lenovo LOQ 15IAX9E (83LK)";
-      if ($("about-os")) $("about-os").textContent = `CachyOS Linux (${dev.kernel || "Kernel x86_64"})`;
-      if ($("about-helper")) $("about-helper").textContent = dev.helper_label ? `loq-helper ${dev.helper_label}` : "loq-helper v0.1.0 Ready";
+      if ($("about-device-model")) $("about-device-model").textContent = model || "--";
+      if ($("about-os")) $("about-os").textContent = [dev.os_name, dev.os_version, dev.kernel].filter(Boolean).join(" · ") || "--";
+      if ($("about-helper")) $("about-helper").textContent = dev.helper_label || "Tidak tersedia";
     }
   } catch (err) {
     console.error("loadSettings error:", err);
@@ -49,7 +49,10 @@ export function initSettings() {
 
   // Language select
   $("sel-language")?.addEventListener("change", (e) => {
-    toast(`Bahasa aplikasi diubah ke ${e.target.options[e.target.selectedIndex].text}`);
+    const val = e.target.value;
+    setLocale(val);
+    applyI18n();
+    toast(val === "en" ? "Language switched to English" : "Bahasa aplikasi diubah ke Indonesia");
   });
 
   // Startup switches

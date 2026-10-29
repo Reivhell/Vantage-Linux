@@ -1,4 +1,4 @@
-# LOQ Control Center — ITE keyboard RGB (unprivileged access)
+# Vantage Linux — ITE keyboard RGB (unprivileged access)
 SUBSYSTEM=="usb", ATTR{idVendor}=="048d", ATTR{idProduct}=="c993", MODE="0666", TAG+="uaccess"
 SUBSYSTEM=="usb", ATTR{idVendor}=="048d", ATTR{idProduct}=="c994", MODE="0666", TAG+="uaccess"
 SUBSYSTEM=="usb", ATTR{idVendor}=="048d", ATTR{idProduct}=="c995", MODE="0666", TAG+="uaccess"

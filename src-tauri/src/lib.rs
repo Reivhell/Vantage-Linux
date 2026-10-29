@@ -9,7 +9,7 @@ use tracing::{info, warn};
 use crate::resource_governor::ResourceGovernor;
 
 pub(crate) use commands::collect_processes;
-pub(crate) use config::{home_dir, HELPER_PATH};
+pub(crate) use config::home_dir;
 use power::{maybe_auto_preset, note_power_state, set_thermal_mode};
 pub(crate) use power::{run_helper, run_helper_quiet};
 pub(crate) use types::which;
@@ -17,7 +17,6 @@ pub(crate) use types::which;
 pub use capabilities::{discover, Capabilities};
 pub use commands::memory_info;
 pub use config::{load_config, save_config, AppConfig};
-pub(crate) use fan_control::FanCurvePoint;
 pub use gpu::GpuModeInfo;
 pub use memory::MemoryInfo;
 pub use power::{
@@ -25,7 +24,7 @@ pub use power::{
     ChargeModeInfo, PowerLimitAttr, SetLimitCmd, ThermalModeInfo,
 };
 pub use stats::{collect_stats, SystemStats};
-pub(crate) use stats::{find_hwmon, read_cpu_temp, read_fan_rpms, read_gpu_temp_sysfs};
+pub(crate) use stats::{collect_stats_raw, read_cpu_temp};
 pub use types::{ProcessInfo, SimpleResult};
 
 mod battery;
@@ -36,8 +35,6 @@ mod db;
 mod device;
 mod diagnostics;
 mod display;
-mod error;
-mod fan;
 mod fan_control;
 mod gpu;
 mod gpu_ext;
@@ -70,7 +67,7 @@ pub struct FanFailSafe;
 
 impl Drop for FanFailSafe {
     fn drop(&mut self) {
-        fan::fan_fail_safe();
+        fan_control::fan_fail_safe();
     }
 }
 
@@ -107,8 +104,19 @@ pub fn preset_info() -> Vec<presets::PresetInfo> {
 fn monitor_loop(handle: tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let _ = APP_HANDLE.set(handle.clone());
     loop {
-        let stats = collect_stats();
-        let _ = handle.emit("loq:stats", &stats);
+        // Tidak ada yang membaca event saat window disembunyikan ke tray.
+        let visible = handle
+            .get_webview_window("main")
+            .map(|w| w.is_visible().unwrap_or(true) && !w.is_minimized().unwrap_or(false))
+            .unwrap_or(false);
+        let stats = if visible {
+            collect_stats()
+        } else {
+            collect_stats_raw()
+        };
+        if visible {
+            let _ = handle.emit("vantage:stats", &stats);
+        }
 
         // Battery history is sampled every 60 s: full capacity, design capacity,
         // health, cycles, power and plug state all come from real sysfs data.
@@ -145,8 +153,6 @@ fn monitor_loop(handle: tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         }
 
         // Deteksi reset firmware pada kipas setiap siklus monitoring.
-        fan::fan_check_reset(1, stats.fan1_rpm);
-        fan::fan_check_reset(2, stats.fan2_rpm);
 
         if let Some(plugged) = stats.power_plugged {
             if note_power_state(plugged) {
@@ -167,7 +173,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let menu = Menu::with_items(app, &[&show, &quit])?;
 
     let mut builder = TrayIconBuilder::new()
-        .tooltip("LOQ Control Center")
+        .tooltip("Vantage Linux")
         .menu(&menu)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => {
@@ -191,7 +197,7 @@ pub fn run() {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .with_target(false)
         .init();
-    info!("starting LOQ Control Center");
+    info!("starting Vantage Linux");
 
     let rt = Runtime::new().expect("failed to create tokio runtime");
     let rules = ResourceGovernor::load_rules();
@@ -230,9 +236,9 @@ pub fn run() {
             history::init_history(86400.0);
             let handle = app.handle().clone();
             std::thread::spawn(move || {
-            if let Err(e) = monitor_loop(handle) {
-                warn!("monitor loop ended: {e}");
-            }
+                if let Err(e) = monitor_loop(handle) {
+                    warn!("monitor loop ended: {e}");
+                }
             });
             build_tray(app)?;
             let cfg = load_config();
@@ -300,6 +306,7 @@ pub fn run() {
             commands::cmd_switch_gpu_mode,
             commands::cmd_get_gpu_processes,
             fan_control::cmd_get_fan_info,
+            fan_control::cmd_set_fan_mode,
             fan_control::cmd_apply_fan_curve,
             fan_control::cmd_set_fan_manual,
             fan_control::cmd_fan_auto,
@@ -320,5 +327,5 @@ pub fn run() {
             commands::cmd_toggle_rule,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running LOQ Control Center");
+        .expect("error while running Vantage Linux");
 }

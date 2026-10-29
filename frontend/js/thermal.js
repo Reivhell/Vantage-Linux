@@ -1,7 +1,50 @@
 // Screen 4: System Temperature monitoring & multi-line chart
-import { $, invoke } from "./core.js";
+import { $, escapeHtml, invoke } from "./core.js";
 
-let thermalWindow = 60; // 1m default
+let thermalWindow = 60;
+
+const fallbackSensor = (id, label) => ({ id, label, temp_c: null });
+
+function sensorsFor(stats) {
+  if (Array.isArray(stats.thermal) && stats.thermal.length) return stats.thermal;
+  return [
+    { id: "cpu", label: "CPU Package", temp_c: stats.cpu_temp },
+    { id: "gpu", label: "GPU", temp_c: stats.gpu_temp },
+    { id: "ssd", label: "NVMe", temp_c: stats.ssd_temp },
+    { id: "ram", label: "RAM", temp_c: stats.ram_temp },
+    { id: "wifi", label: "WiFi", temp_c: stats.wifi_temp },
+    { id: "board", label: "EC / Board", temp_c: stats.board_temp },
+  ].filter((s) => s.id !== undefined);
+}
+
+function sensorById(stats, id) {
+  return sensorsFor(stats).find((sensor) => sensor.id === id) || fallbackSensor(id, id);
+}
+
+function badgeState(temp) {
+  if (temp === null || temp === undefined) return { text: "N/A", color: "var(--text-muted)", bg: "rgba(255,255,255,0.06)" };
+  if (temp >= 85) return { text: "Tinggi", color: "var(--error)", bg: "rgba(255, 101, 122, 0.15)" };
+  if (temp >= 70) return { text: "Hangat", color: "var(--warning)", bg: "rgba(246, 189, 75, 0.15)" };
+  return { text: "Normal", color: "var(--success)", bg: "rgba(39, 217, 149, 0.15)" };
+}
+
+function setGauge(ringId, valueId, badgeId, temp) {
+  const ring = $(ringId);
+  if (ring) {
+    const c = 251;
+    const pct = temp === null || temp === undefined ? 0 : Math.min(100, Math.max(0, temp));
+    ring.style.strokeDasharray = `${c}`;
+    ring.style.strokeDashoffset = `${c - (pct / 100) * c}`;
+  }
+  if ($(valueId)) $(valueId).textContent = temp === null || temp === undefined ? "--" : `${Math.round(temp)}°C`;
+  const badge = $(badgeId);
+  if (badge) {
+    const state = badgeState(temp);
+    badge.textContent = state.text;
+    badge.style.color = state.color;
+    badge.style.background = state.bg;
+  }
+}
 
 export async function loadThermal() {
   try {
@@ -16,92 +59,75 @@ export async function loadThermal() {
 export function updateThermalGauges(stats) {
   if (!stats) return;
 
-  const cpu = Math.round(stats.temp_cpu || 48);
-  const gpu = Math.round(stats.temp_gpu || 42);
-  const ssd = Math.round(stats.temp_ssd || 36);
+  const cpu = sensorById(stats, "cpu").temp_c ?? null;
+  const gpu = sensorById(stats, "gpu").temp_c ?? null;
+  const ssd = sensorById(stats, "ssd").temp_c ?? null;
 
-  if ($("gauge-temp-cpu")) $("gauge-temp-cpu").textContent = `${cpu}°C`;
-  if ($("gauge-temp-gpu")) $("gauge-temp-gpu").textContent = `${gpu}°C`;
-  if ($("gauge-temp-ssd")) $("gauge-temp-ssd").textContent = `${ssd}°C`;
+  setGauge("ring-cpu-temp", "gauge-temp-cpu", "badge-temp-cpu", cpu);
+  setGauge("ring-gpu-temp", "gauge-temp-gpu", "badge-temp-gpu", gpu);
+  setGauge("ring-ssd-temp", "gauge-temp-ssd", "badge-temp-ssd", ssd);
 
-  // Circumference for r=40 is 2 * Math.PI * 40 ~= 251.3
-  const c = 251;
-  const setRing = (id, temp) => {
-    const ring = $(id);
-    if (!ring) return;
-    const pct = Math.min(100, Math.max(0, (temp / 100) * 100));
-    const offset = c - (pct / 100) * c;
-    ring.style.strokeDasharray = `${c}`;
-    ring.style.strokeDashoffset = `${offset}`;
-  };
+  const row = $("thermal-sensor-row");
+  if (row) {
+    row.innerHTML = sensorsFor(stats)
+      .filter((sensor) => !["cpu", "gpu", "ssd"].includes(sensor.id))
+      .map((sensor) => {
+        const temp = sensor.temp_c;
+        const state = badgeState(temp);
+        return `<div class="thermal-sensor-item">
+          <div><span class="thermal-sensor-label">${escapeHtml(sensor.label)}</span>
+          <span class="thermal-sensor-source">${escapeHtml(sensor.source || "")}</span></div>
+          <span class="thermal-sensor-temp mono">${temp === null || temp === undefined ? "--" : `${Math.round(temp)}°C`}</span>
+          <span class="status-badge-pill" style="color:${state.color};background:${state.bg}">${state.text}</span>
+        </div>`;
+      })
+      .join("");
+  }
+}
 
-  setRing("ring-cpu-temp", cpu);
-  setRing("ring-gpu-temp", gpu);
-  setRing("ring-ssd-temp", ssd);
 
-  const updateBadge = (id, temp) => {
-    const el = $(id);
-    if (!el) return;
-    if (temp >= 85) {
-      el.textContent = "Tinggi";
-      el.style.color = "var(--error)";
-      el.style.background = "rgba(255, 101, 122, 0.15)";
-    } else if (temp >= 70) {
-      el.textContent = "Hangat";
-      el.style.color = "var(--warning)";
-      el.style.background = "rgba(246, 189, 75, 0.15)";
-    } else {
-      el.textContent = "Normal";
-      el.style.color = "var(--success)";
-      el.style.background = "rgba(39, 217, 149, 0.15)";
-    }
-  };
+function setThermalXLabels() {
+  for (let i = 0; i < 7; i += 1) {
+    const el = $(`thermal-x-${i}`);
+    if (!el) continue;
+    const seconds = (thermalWindow * i) / 6;
+    if (thermalWindow >= 4 * 3600) el.textContent = `${Math.round(seconds / 3600)}h`;
+    else if (thermalWindow >= 120) el.textContent = `${Math.round(seconds / 60)}m`;
+    else el.textContent = `${Math.round(seconds)}s`;
+  }
+}
 
-  updateBadge("badge-temp-cpu", cpu);
-  updateBadge("badge-temp-gpu", gpu);
-  updateBadge("badge-temp-ssd", ssd);
+function chartPoints(series) {
+  if (!series || !series.points || series.points.length < 2) return "";
+  const now = Date.now() / 1000;
+  const start = now - thermalWindow;
+  return series.points
+    .map((point) => {
+      const x = 40 + Math.max(0, Math.min(1, (point.timestamp - start) / thermalWindow)) * 550;
+      const y = 131 - (Math.min(100, Math.max(0, point.value)) / 100) * 116;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
 }
 
 export async function updateThermalChart() {
   try {
-    const [cpuHist, gpuHist] = await Promise.all([
+    const [cpuHist, gpuHist, ssdHist] = await Promise.all([
       invoke("cmd_get_history", { metric: "cpu_temp", window_seconds: thermalWindow }),
       invoke("cmd_get_history", { metric: "gpu_temp", window_seconds: thermalWindow }),
+      invoke("cmd_get_history", { metric: "ssd_temp", window_seconds: thermalWindow }),
     ]);
-
-    const lineCpu = $("thermal-line-cpu");
-    const lineGpu = $("thermal-line-gpu");
-    const lineSsd = $("thermal-line-ssd");
-
-    // Coordinate space: X in [40, 590], Y in [131 (0°C) to 15 (100°C)]
-    if (cpuHist && cpuHist.points && cpuHist.points.length > 2) {
-      const now = Date.now() / 1000;
-      const start = now - thermalWindow;
-      const pts = cpuHist.points.map((p) => {
-        const x = 40 + Math.max(0, Math.min(1, (p.timestamp - start) / thermalWindow)) * 550;
-        const y = 131 - (Math.min(100, p.value) / 100) * 116;
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      });
-      lineCpu?.setAttribute("points", pts.join(" "));
-    }
-
-    if (gpuHist && gpuHist.points && gpuHist.points.length > 2) {
-      const now = Date.now() / 1000;
-      const start = now - thermalWindow;
-      const pts = gpuHist.points.map((p) => {
-        const x = 40 + Math.max(0, Math.min(1, (p.timestamp - start) / thermalWindow)) * 550;
-        const y = 131 - (Math.min(100, p.value) / 100) * 116;
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      });
-      lineGpu?.setAttribute("points", pts.join(" "));
-    }
-  } catch (e) {
-    // Graceful fallback to default mockup lines
+    const set = (id, series) => $(id)?.setAttribute("points", chartPoints(series));
+    set("thermal-line-cpu", cpuHist);
+    set("thermal-line-gpu", gpuHist);
+    set("thermal-line-ssd", ssdHist);
+    setThermalXLabels();
+  } catch (err) {
+    console.error("updateThermalChart error:", err);
   }
 }
 
 export function initThermal() {
-  // Time window selector pills (1m, 15m, 1h, 24h)
   document.querySelectorAll("#thermal-chart-pills button").forEach((btn) => {
     btn.addEventListener("click", () => {
       document.querySelectorAll("#thermal-chart-pills button").forEach((b) => b.classList.remove("active"));
@@ -111,18 +137,21 @@ export function initThermal() {
     });
   });
 
-  // Header Mode pills: Real-time vs Riwayat
   $("pill-realtime")?.addEventListener("click", () => {
     $("pill-realtime")?.classList.add("active");
     $("pill-history")?.classList.remove("active");
-    $("thermal-gauges-wrap").style.display = "grid";
-    $("thermal-history-card").style.display = "block";
+    const gauges = $("thermal-gauges-wrap");
+    if (gauges) gauges.style.display = "grid";
+    const history = $("thermal-history-card");
+    if (history) history.style.display = "block";
   });
 
   $("pill-history")?.addEventListener("click", () => {
     $("pill-history")?.classList.add("active");
     $("pill-realtime")?.classList.remove("active");
-    $("thermal-gauges-wrap").style.display = "none";
-    $("thermal-history-card").style.display = "block";
+    const gauges = $("thermal-gauges-wrap");
+    if (gauges) gauges.style.display = "none";
+    const history = $("thermal-history-card");
+    if (history) history.style.display = "block";
   });
 }

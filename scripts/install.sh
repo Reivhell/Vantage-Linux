@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# LOQ Control Center (Rust + Tauri) — Installer
+# Vantage Linux Installer
 # =============================================================================
 # Interactive:      sudo ./scripts/install.sh
 # Install:          sudo ./scripts/install.sh --install
@@ -17,12 +17,28 @@ for arg in "$@"; do
     [[ "$arg" == "--no-color" ]] && export NO_COLOR=1
 done
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 # Support install.sh next to Cargo.toml as well as inside scripts/.
 if [[ ! -f "$PROJECT_DIR/Cargo.toml" && -f "$SCRIPT_DIR/Cargo.toml" ]]; then
     PROJECT_DIR="$SCRIPT_DIR"
 fi
+
+# Fallback: if executed via curl pipe or outside source tree, clone the repository
+if [[ ! -f "$PROJECT_DIR/Cargo.toml" ]]; then
+    echo -e "\033[1;36m==>\033[0m Source tree not found locally. Cloning Vantage Linux repository..."
+    TMP_CLONE_DIR="$(mktemp -d /tmp/vantage-linux-XXXXXX)"
+    if ! command -v git >/dev/null 2>&1; then
+        echo -e "\033[1;31mError:\033[0m 'git' command not found. Please install git first." >&2
+        exit 1
+    fi
+    git clone https://github.com/Reivhell/Vantage-Linux.git "$TMP_CLONE_DIR"
+    exec bash "$TMP_CLONE_DIR/scripts/install.sh" "$@"
+fi
+
+APP_ICON="$PROJECT_DIR/src-tauri/icons/Icon.avif"
+# Tauri embeds a PNG window icon on Unix; the desktop entry uses the AVIF source.
+TAURI_ICON="$PROJECT_DIR/src-tauri/icons/icon.png"
 
 # ---------------------------------------------------------------------------
 # Shared terminal UI and privilege helpers
@@ -49,7 +65,7 @@ ui_banner() {
     local version="${SOURCE_VERSION:-?}"
     printf '\n'
     printf '%s\n' "${CYAN}${BOLD}  ╭──────────────────────────────────────────────────────────╮${RESET}"
-    printf '%s%-58s%s\n' "${CYAN}${BOLD}  │${RESET}" "  LOQ CONTROL CENTER" "${CYAN}${BOLD}│${RESET}"
+    printf '%s%-58s%s\n' "${CYAN}${BOLD}  │${RESET}" "  VANTAGE LINUX" "${CYAN}${BOLD}│${RESET}"
     printf '%s%-58s%s\n' "${CYAN}${BOLD}  │${RESET}" "  Lenovo LOQ hardware control for Linux" "${CYAN}${BOLD}│${RESET}"
     printf '%s%-58s%s\n' "${CYAN}${BOLD}  │${RESET}" "  version $version" "${CYAN}${BOLD}│${RESET}"
     printf '%s\n' "${CYAN}${BOLD}  ╰──────────────────────────────────────────────────────────╯${RESET}"
@@ -203,7 +219,7 @@ systemctl_user() {
 }
 
 service_active() {
-    systemctl_user is-active --quiet loq-control.service 2>/dev/null
+    systemctl_user is-active --quiet vantage-linux.service 2>/dev/null
 }
 
 source_version() {
@@ -336,7 +352,7 @@ ORIGINAL_ARGS=("$@")
 ACTION=""
 PULL=0
 NO_BUILD=0
-ASSUME_YES="${LOQ_ASSUME_YES:-0}"
+ASSUME_YES="${VANTAGE_ASSUME_YES:-0}"
 ENABLE_SERVICE=0
 DISABLE_SERVICE=0
 KEEP_DATA=0
@@ -344,7 +360,7 @@ PURGE_FLAG=0
 
 usage() {
     cat <<EOF
-LOQ Control Center installer ${SOURCE_VERSION}
+Vantage Linux installer ${SOURCE_VERSION}
 
 Usage:
   $DISPLAY_INSTALL                 Interactive menu
@@ -370,7 +386,7 @@ Options:
   -h, --help            Show this help
   -V, --version         Show the source version
 
-Uninstall removes only files owned by LOQ Control Center. It never removes
+Uninstall removes only files owned by Vantage Linux. It never removes
 system packages, drivers, or files belonging to other applications. Use
 --keep-data to preserve your config, profiles and battery history.
 EOF
@@ -379,7 +395,7 @@ EOF
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -h|--help) usage; exit 0 ;;
-        -V|--version) printf 'loq-control %s\n' "$SOURCE_VERSION"; exit 0 ;;
+        -V|--version) printf 'vantage-linux %s\n' "$SOURCE_VERSION"; exit 0 ;;
         --install) ACTION=install ;;
         --update) ACTION=install; PULL=1 ;;
         --reinstall) ACTION=install ;;
@@ -428,8 +444,8 @@ service_state() {
         return
     fi
     local enabled active
-    enabled="$(systemctl_user is-enabled loq-control.service 2>/dev/null || true)"
-    active="$(systemctl_user is-active loq-control.service 2>/dev/null || true)"
+    enabled="$(systemctl_user is-enabled vantage-linux.service 2>/dev/null || true)"
+    active="$(systemctl_user is-active vantage-linux.service 2>/dev/null || true)"
     printf '%s / %s' "${enabled:-unknown}" "${active:-inactive}"
 }
 
@@ -438,8 +454,8 @@ file_state() {
 }
 
 app_state() {
-    local release="$PROJECT_DIR/target/release/loq-control"
-    local installed='/usr/local/bin/loq-control'
+    local release="$PROJECT_DIR/target/release/vantage-linux"
+    local installed='/usr/local/bin/vantage-linux'
     if [[ ! -x "$installed" ]]; then
         printf 'not installed'
         return
@@ -459,14 +475,14 @@ app_state() {
 }
 
 helper_state() {
-    local installed='/usr/local/bin/loq-helper'
+    local installed='/usr/local/bin/vantage-helper'
     if [[ ! -x "$installed" ]]; then
         printf 'not installed'
         return
     fi
     local version
     version="$("$installed" version 2>/dev/null || printf 'unknown')"
-    local release="$PROJECT_DIR/target/release/loq-helper"
+    local release="$PROJECT_DIR/target/release/vantage-helper"
     if [[ ! -x "$release" ]]; then
         printf '%s · no release build to compare' "$version"
         return
@@ -488,6 +504,65 @@ show_overview() {
     ui_kv "App" "$(app_state)"
     ui_kv "Helper" "$(helper_state)"
     ui_kv "Service" "$(service_state)"
+}
+
+# Remove integration owned by the pre-rebrand name. User data is migrated
+# separately so existing profiles, config and battery history survive.
+remove_legacy_integration() {
+    ui_info "Removing legacy LOQ Control Center integration"
+    systemctl_user disable --now loq-control.service 2>/dev/null || true
+    rm -f /usr/local/bin/loq-control /usr/local/bin/loq-helper \
+        /etc/sudoers.d/99-loq-control \
+        /usr/share/polkit-1/actions/com.github.loq-control.policy \
+        /usr/share/applications/loq-control.desktop
+    rm -f "$REAL_HOME/.config/systemd/user/loq-control.service" \
+        "$REAL_HOME/.config/systemd/user/graphical-session.target.wants/loq-control.service" \
+        "$REAL_HOME/.config/systemd/user/default.target.wants/loq-control.service" \
+        "$REAL_HOME/.config/autostart/loq-control.desktop" \
+        "$REAL_HOME/.local/share/applications/loq-control.desktop" \
+        "$REAL_HOME/.local/bin/loq-control" "$REAL_HOME/.local/bin/loq-helper"
+    rm -f /usr/share/icons/hicolor/*/apps/loq-control.png
+    rm -f /usr/share/icons/hicolor/*/apps/loq-control.avif
+    rm -f "$REAL_HOME"/.local/share/icons/hicolor/*/apps/loq-control.png
+    rm -f "$REAL_HOME"/.local/share/icons/hicolor/*/apps/loq-control.avif
+    remove_owned_globs \
+        "$REAL_HOME/.local/lib/python*/site-packages/loq_control" \
+        "$REAL_HOME/.local/lib/python*/site-packages/loq_control-*" \
+        "$REAL_HOME/.local/lib/python*/site-packages/loq_control.*.dist-info" \
+        "$REAL_HOME/.local/lib/python*/site-packages/loq_control.egg-info" \
+        "$REAL_HOME/.local/lib/python*/site-packages/loq_control-*.egg-info" \
+        "$REAL_HOME/.local/lib/python*/site-packages/loq_helper.py"
+    systemctl_user daemon-reload 2>/dev/null || true
+}
+
+migrate_legacy_user_data() {
+    local pair old new
+    for pair in \
+        ".config/loq-control:.config/vantage-linux" \
+        ".local/share/loq-control:.local/share/vantage-linux" \
+        ".local/state/loq-control:.local/state/vantage-linux" \
+        ".cache/loq-control:.cache/vantage-linux"; do
+        old="$REAL_HOME/${pair%%:*}"
+        new="$REAL_HOME/${pair##*:}"
+        [[ -e "$old" ]] || continue
+        if [[ -e "$new" ]]; then
+            # An empty directory can be left by a failed/early new launch; it
+            # must not block the migration of the real legacy data.
+            if [[ -d "$new" && ! -L "$new" ]] \
+                && [[ -z "$(find "$new" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+                as_user rmdir "$new"
+            else
+                ui_warn "Legacy data left at $old (new path already exists)"
+                continue
+            fi
+        fi
+        as_user mkdir -p "$(dirname "$new")"
+        if as_user mv "$old" "$new"; then
+            ui_ok "Migrated ${old#"$REAL_HOME"/} to ${new#"$REAL_HOME"/}"
+        else
+            ui_warn "Could not migrate $old; leaving it in place"
+        fi
+    done
 }
 
 # ---------------------------------------------------------------------------
@@ -531,10 +606,11 @@ check_source() {
         "$PROJECT_DIR/Cargo.toml"
         "$PROJECT_DIR/src-tauri/Cargo.toml"
         "$PROJECT_DIR/udev/99-ite-keyboard.rules"
-        "$PROJECT_DIR/polkit/com.github.loq-control.policy"
-        "$PROJECT_DIR/systemd/loq-control.service"
-        "$PROJECT_DIR/desktop/loq-control.desktop"
-        "$PROJECT_DIR/src-tauri/icons/icon.png"
+        "$PROJECT_DIR/polkit/com.github.vantagelinux.policy"
+        "$PROJECT_DIR/systemd/vantage-linux.service"
+        "$PROJECT_DIR/desktop/vantage-linux.desktop"
+        "$APP_ICON"
+        "$TAURI_ICON"
     )
     command -v getent >/dev/null 2>&1 || ui_err "getent is required (install libc)"
     command -v install >/dev/null 2>&1 || ui_err "install is required (coreutils)"
@@ -547,22 +623,22 @@ check_source() {
 
 install_binaries() {
     local release="$PROJECT_DIR/target/release"
-    [[ -x "$release/loq-control" ]] || ui_err "loq-control binary not found in $release"
-    [[ -x "$release/loq-helper" ]] || ui_err "loq-helper binary not found in $release"
+    [[ -x "$release/vantage-linux" ]] || ui_err "vantage-linux binary not found in $release"
+    [[ -x "$release/vantage-helper" ]] || ui_err "vantage-helper binary not found in $release"
 
     ui_step 1 7 "Installing binaries to /usr/local/bin"
-    rm -f /usr/local/bin/loq-control /usr/local/bin/loq-helper
-    install -Dm755 "$release/loq-control" /usr/local/bin/loq-control
-    install -Dm755 "$release/loq-helper" /usr/local/bin/loq-helper
-    chown root:root /usr/local/bin/loq-control /usr/local/bin/loq-helper
+    rm -f /usr/local/bin/vantage-linux /usr/local/bin/vantage-helper
+    install -Dm755 "$release/vantage-linux" /usr/local/bin/vantage-linux
+    install -Dm755 "$release/vantage-helper" /usr/local/bin/vantage-helper
+    chown root:root /usr/local/bin/vantage-linux /usr/local/bin/vantage-helper
     ui_ok "Binaries installed"
 }
 
 install_sudoers() {
     ui_step 2 7 "Configuring the privileged helper"
-    local rule=/etc/sudoers.d/99-loq-control
+    local rule=/etc/sudoers.d/99-vantage-linux
     cat > "$rule" <<EOF
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/local/bin/loq-helper
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/local/bin/vantage-helper
 EOF
     chmod 0440 "$rule"
     if ! visudo -cf "$rule" >/dev/null 2>&1; then
@@ -575,8 +651,8 @@ EOF
 install_polkit() {
     local dir=/usr/share/polkit-1/actions
     if [[ -d "$dir" ]]; then
-        install -Dm644 "$PROJECT_DIR/polkit/com.github.loq-control.policy" \
-            "$dir/com.github.loq-control.policy"
+        install -Dm644 "$PROJECT_DIR/polkit/com.github.vantagelinux.policy" \
+            "$dir/com.github.vantagelinux.policy"
         ui_ok "Polkit policy installed"
     else
         ui_warn "Polkit actions directory not found; skipping"
@@ -596,8 +672,8 @@ install_service() {
     ui_step 4 7 "Installing systemd user service"
     local dir="$REAL_HOME/.config/systemd/user"
     as_user mkdir -p "$dir"
-    install -Dm644 "$PROJECT_DIR/systemd/loq-control.service" "$dir/loq-control.service"
-    chown "$REAL_USER:" "$dir/loq-control.service"
+    install -Dm644 "$PROJECT_DIR/systemd/vantage-linux.service" "$dir/vantage-linux.service"
+    chown "$REAL_USER:" "$dir/vantage-linux.service"
     systemctl_user daemon-reload 2>/dev/null || true
     ui_ok "User service installed (autostart stays opt-in)"
 }
@@ -606,15 +682,16 @@ install_desktop() {
     ui_step 5 7 "Installing desktop entry and icon"
     as_user mkdir -p "$REAL_HOME/.local/share/applications"
     as_user mkdir -p "$REAL_HOME/.local/share/icons/hicolor/256x256/apps"
-    install -Dm644 "$PROJECT_DIR/desktop/loq-control.desktop" \
-        "$REAL_HOME/.local/share/applications/loq-control.desktop"
-    install -Dm644 "$PROJECT_DIR/src-tauri/icons/icon.png" \
-        "$REAL_HOME/.local/share/icons/hicolor/256x256/apps/loq-control.png"
-    install -Dm644 "$PROJECT_DIR/src-tauri/icons/icon.png" \
-        /usr/share/icons/hicolor/256x256/apps/loq-control.png
+    install -Dm644 "$PROJECT_DIR/desktop/vantage-linux.desktop" \
+        "$REAL_HOME/.local/share/applications/vantage-linux.desktop"
+    # Icon theme lookup wants a .png name; GdkPixbuf decodes the AVIF contents.
+    install -Dm644 "$APP_ICON" \
+        "$REAL_HOME/.local/share/icons/hicolor/256x256/apps/vantage-linux.png"
+    install -Dm644 "$APP_ICON" \
+        /usr/share/icons/hicolor/256x256/apps/vantage-linux.png
     chown "$REAL_USER:" \
-        "$REAL_HOME/.local/share/applications/loq-control.desktop" \
-        "$REAL_HOME/.local/share/icons/hicolor/256x256/apps/loq-control.png"
+        "$REAL_HOME/.local/share/applications/vantage-linux.desktop" \
+        "$REAL_HOME/.local/share/icons/hicolor/256x256/apps/vantage-linux.png"
     as_user update-desktop-database "$REAL_HOME/.local/share/applications" 2>/dev/null || true
     as_user gtk-update-icon-cache -f "$REAL_HOME/.local/share/icons/hicolor" 2>/dev/null || true
     gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
@@ -623,7 +700,7 @@ install_desktop() {
 
 install_config() {
     ui_step 6 7 "Preparing user configuration"
-    as_user mkdir -p "$REAL_HOME/.config/loq-control"
+    as_user mkdir -p "$REAL_HOME/.config/vantage-linux"
     ui_ok "Config directory ready (existing config preserved)"
 }
 
@@ -673,11 +750,11 @@ restart_service_if_needed() {
     local was_active="$1"
     if [[ "$DISABLE_SERVICE" -eq 1 ]]; then
         ui_info "Disabling user service"
-        systemctl_user disable --now loq-control.service 2>/dev/null \
+        systemctl_user disable --now vantage-linux.service 2>/dev/null \
             || ui_warn "Could not disable the user service (no graphical session?)"
     elif [[ "$was_active" -eq 1 || "$ENABLE_SERVICE" -eq 1 ]]; then
         ui_info "Starting user service"
-        if systemctl_user enable --now loq-control.service 2>/dev/null; then
+        if systemctl_user enable --now vantage-linux.service 2>/dev/null; then
             ui_ok "User service enabled and running"
         else
             ui_warn "Could not start the user service; start it from your desktop session"
@@ -691,10 +768,10 @@ print_summary() {
     ui_rule
     printf '%s\n' "  ${GREEN}${BOLD}✔ ${title}${RESET}"
     ui_rule
-    ui_kv "Start now" "loq-control"
-    ui_kv "Discovery" "loq-control --discover"
-    ui_kv "Start at login" "systemctl --user enable --now loq-control"
-    ui_kv "Logs" "journalctl --user -u loq-control -f"
+    ui_kv "Start now" "vantage-linux"
+    ui_kv "Discovery" "vantage-linux --discover"
+    ui_kv "Start at login" "systemctl --user enable --now vantage-linux"
+    ui_kv "Logs" "journalctl --user -u vantage-linux -f"
     ui_kv "Status" "sudo $DISPLAY_INSTALL --status"
     echo
 }
@@ -722,14 +799,18 @@ do_install() {
     fi
 
     local release="$PROJECT_DIR/target/release"
-    [[ -x "$release/loq-control" ]] || ui_err "loq-control binary not found in $release (run --reinstall)"
-    [[ -x "$release/loq-helper" ]] || ui_err "loq-helper binary not found in $release (run --reinstall)"
+    [[ -x "$release/vantage-linux" ]] || ui_err "vantage-linux binary not found in $release (run --reinstall)"
+    [[ -x "$release/vantage-helper" ]] || ui_err "vantage-helper binary not found in $release (run --reinstall)"
+
+    ui_section "Legacy migration"
+    remove_legacy_integration
+    migrate_legacy_user_data
 
     local service_was_active=0
     if service_active; then
         service_was_active=1
         ui_info "Stopping the running user service"
-        systemctl_user stop loq-control.service 2>/dev/null || true
+        systemctl_user stop vantage-linux.service 2>/dev/null || true
     fi
 
     ui_section "System integration"
@@ -744,7 +825,7 @@ do_install() {
     restart_service_if_needed "$service_was_active"
     ui_ok "System integration complete"
 
-    print_summary "LOQ Control Center $SOURCE_VERSION installed"
+    print_summary "Vantage Linux $SOURCE_VERSION installed"
 }
 
 do_repair() {
@@ -759,18 +840,22 @@ do_repair() {
     if service_active; then
         service_was_active=1
         ui_info "Stopping the running user service"
-        systemctl_user stop loq-control.service 2>/dev/null || true
+        systemctl_user stop vantage-linux.service 2>/dev/null || true
     fi
 
     ui_section "Refreshing system integration"
     local release="$PROJECT_DIR/target/release"
-    if [[ -x "$release/loq-control" && -x "$release/loq-helper" ]]; then
+    if [[ -x "$release/vantage-linux" && -x "$release/vantage-helper" ]]; then
         install_binaries
-    elif [[ -x /usr/local/bin/loq-control && -x /usr/local/bin/loq-helper ]]; then
+    elif [[ -x /usr/local/bin/vantage-linux && -x /usr/local/bin/vantage-helper ]]; then
         ui_warn "No release binaries found; keeping the installed binaries."
     else
         ui_err "No binaries found; run --reinstall to build them first"
     fi
+
+    ui_section "Legacy migration"
+    remove_legacy_integration
+    migrate_legacy_user_data
     install_sudoers
     install_polkit
     install_udev
@@ -793,25 +878,30 @@ do_status() {
     ui_kv "App" "$(app_state)"
     ui_kv "Helper" "$(helper_state)"
     ui_kv "Service" "$(service_state)"
-    ui_kv "Sudoers" "$(file_state /etc/sudoers.d/99-loq-control)"
-    ui_kv "Polkit" "$(file_state /usr/share/polkit-1/actions/com.github.loq-control.policy)"
+    ui_kv "Sudoers" "$(file_state /etc/sudoers.d/99-vantage-linux)"
+    ui_kv "Polkit" "$(file_state /usr/share/polkit-1/actions/com.github.vantagelinux.policy)"
     ui_kv "udev" "$(file_state /etc/udev/rules.d/99-ite-keyboard.rules)"
-    ui_kv "User unit" "$(file_state "$REAL_HOME/.config/systemd/user/loq-control.service")"
-    ui_kv "Desktop" "$(file_state "$REAL_HOME/.local/share/applications/loq-control.desktop")"
-    ui_kv "Config" "$(file_state "$REAL_HOME/.config/loq-control/config.toml")"
-    ui_kv "Profiles" "$(file_state "$REAL_HOME/.config/loq-control/profiles.json")"
-    ui_kv "Reports" "$(file_state "$REAL_HOME/.local/state/loq-control")"
-    if [[ -f "$REAL_HOME/.local/share/loq-control/battery.db" ]]; then
-        ui_kv "Battery DB" "$(du -h "$REAL_HOME/.local/share/loq-control/battery.db" | cut -f1) · $REAL_HOME/.local/share/loq-control/battery.db"
+    ui_kv "User unit" "$(file_state "$REAL_HOME/.config/systemd/user/vantage-linux.service")"
+    ui_kv "Desktop" "$(file_state "$REAL_HOME/.local/share/applications/vantage-linux.desktop")"
+    ui_kv "Icon" "$(file_state "$REAL_HOME/.local/share/icons/hicolor/256x256/apps/vantage-linux.png")"
+    ui_kv "Config" "$(file_state "$REAL_HOME/.config/vantage-linux/config.toml")"
+    ui_kv "Profiles" "$(file_state "$REAL_HOME/.config/vantage-linux/profiles.json")"
+    ui_kv "Reports" "$(file_state "$REAL_HOME/.local/state/vantage-linux")"
+    if [[ -f "$REAL_HOME/.local/share/vantage-linux/battery.db" ]]; then
+        ui_kv "Battery DB" "$(du -h "$REAL_HOME/.local/share/vantage-linux/battery.db" | cut -f1) · $REAL_HOME/.local/share/vantage-linux/battery.db"
     else
         ui_kv "Battery DB" "no samples yet"
+    fi
+    if [[ -e /usr/local/bin/loq-control || -e /usr/local/bin/loq-helper \
+        || -e "$REAL_HOME/.config/loq-control" || -e "$REAL_HOME/.local/share/loq-control" ]]; then
+        ui_kv "Legacy" "found; run --install to migrate"
     fi
     echo
 }
 
 REMOVED_COUNT=0
 
-# Remove exact paths that belong to LOQ Control Center.
+# Remove exact paths that belong to Vantage Linux.
 remove_owned() {
     local path
     for path in "$@"; do
@@ -822,7 +912,7 @@ remove_owned() {
     done
 }
 
-# Remove glob patterns, e.g. ~/.local/lib/python*/site-packages/loq_control.
+# Remove glob patterns, e.g. ~/.local/lib/python*/site-packages/vantage_linux.
 # compgen only returns existing matches, so unrelated files are never touched.
 remove_owned_globs() {
     local pattern p
@@ -842,42 +932,66 @@ do_uninstall() {
     ui_section "Uninstall"
 
     if [[ "$KEEP_DATA" -eq 1 ]]; then
-        ui_confirm "Remove LOQ Control Center and its system integration? Config, profiles and battery history stay." no \
+        ui_confirm "Remove Vantage Linux and its system integration? Config, profiles and battery history stay." no \
             || { ui_info "Cancelled."; return; }
     else
         ui_warn "This removes the app and all of its own files, including config, profiles, reports and battery history."
-        ui_confirm "Remove everything owned by LOQ Control Center?" no \
+        ui_confirm "Remove everything owned by Vantage Linux?" no \
             || { ui_info "Cancelled."; return; }
     fi
 
-    ui_info "Stopping and disabling user service"
+    ui_info "Stopping and disabling user services"
+    systemctl_user disable --now vantage-linux.service 2>/dev/null || true
     systemctl_user disable --now loq-control.service 2>/dev/null || true
 
     ui_section "Removing program files"
     REMOVED_COUNT=0
 
-    # System-wide integration owned by LOQ Control Center.
+    # System-wide integration owned by Vantage Linux.
     remove_owned \
+        /usr/local/bin/vantage-linux \
+        /usr/local/bin/vantage-helper \
         /usr/local/bin/loq-control \
         /usr/local/bin/loq-helper \
+        /etc/sudoers.d/99-vantage-linux \
         /etc/sudoers.d/99-loq-control \
+        /usr/share/polkit-1/actions/com.github.vantagelinux.policy \
         /usr/share/polkit-1/actions/com.github.loq-control.policy \
         /etc/udev/rules.d/99-ite-keyboard.rules \
+        /usr/share/applications/vantage-linux.desktop \
         /usr/share/applications/loq-control.desktop
 
     # Per-user integration, icons and old Python entry points.
     remove_owned \
+        "$REAL_HOME/.config/systemd/user/vantage-linux.service" \
+        "$REAL_HOME/.config/systemd/user/graphical-session.target.wants/vantage-linux.service" \
+        "$REAL_HOME/.config/systemd/user/default.target.wants/vantage-linux.service" \
         "$REAL_HOME/.config/systemd/user/loq-control.service" \
         "$REAL_HOME/.config/systemd/user/graphical-session.target.wants/loq-control.service" \
         "$REAL_HOME/.config/systemd/user/default.target.wants/loq-control.service" \
+        "$REAL_HOME/.config/autostart/vantage-linux.desktop" \
         "$REAL_HOME/.config/autostart/loq-control.desktop" \
+        "$REAL_HOME/.local/share/applications/vantage-linux.desktop" \
         "$REAL_HOME/.local/share/applications/loq-control.desktop" \
+        "$REAL_HOME/.local/bin/vantage-linux" \
+        "$REAL_HOME/.local/bin/vantage-helper" \
         "$REAL_HOME/.local/bin/loq-control" \
         "$REAL_HOME/.local/bin/loq-helper"
 
     remove_owned_globs \
+        "/usr/share/icons/hicolor/*/apps/vantage-linux.png" \
+        "/usr/share/icons/hicolor/*/apps/vantage-linux.avif" \
         "/usr/share/icons/hicolor/*/apps/loq-control.png" \
+        "/usr/share/icons/hicolor/*/apps/loq-control.avif" \
+        "$REAL_HOME/.local/share/icons/hicolor/*/apps/vantage-linux.png" \
+        "$REAL_HOME/.local/share/icons/hicolor/*/apps/vantage-linux.avif" \
         "$REAL_HOME/.local/share/icons/hicolor/*/apps/loq-control.png" \
+        "$REAL_HOME/.local/share/icons/hicolor/*/apps/loq-control.avif" \
+        "$REAL_HOME/.local/lib/python*/site-packages/vantage_linux" \
+        "$REAL_HOME/.local/lib/python*/site-packages/vantage_linux-*" \
+        "$REAL_HOME/.local/lib/python*/site-packages/vantage_linux.*.dist-info" \
+        "$REAL_HOME/.local/lib/python*/site-packages/vantage_linux.egg-info" \
+        "$REAL_HOME/.local/lib/python*/site-packages/vantage_linux-*.egg-info" \
         "$REAL_HOME/.local/lib/python*/site-packages/loq_control" \
         "$REAL_HOME/.local/lib/python*/site-packages/loq_control-*" \
         "$REAL_HOME/.local/lib/python*/site-packages/loq_control.*.dist-info" \
@@ -886,12 +1000,16 @@ do_uninstall() {
         "$REAL_HOME/.local/lib/python*/site-packages/loq_helper.py"
 
     if [[ "$KEEP_DATA" -eq 1 ]]; then
-        remove_owned "$REAL_HOME/.cache/loq-control"
+        remove_owned "$REAL_HOME/.cache/vantage-linux" "$REAL_HOME/.cache/loq-control"
     else
         remove_owned \
+            "$REAL_HOME/.config/vantage-linux" \
             "$REAL_HOME/.config/loq-control" \
+            "$REAL_HOME/.local/share/vantage-linux" \
             "$REAL_HOME/.local/share/loq-control" \
+            "$REAL_HOME/.local/state/vantage-linux" \
             "$REAL_HOME/.local/state/loq-control" \
+            "$REAL_HOME/.cache/vantage-linux" \
             "$REAL_HOME/.cache/loq-control"
     fi
 
@@ -903,8 +1021,8 @@ do_uninstall() {
     ui_ok "$REMOVED_COUNT program file(s) removed"
 
     if [[ "$KEEP_DATA" -eq 1 ]]; then
-        ui_ok "Config kept at $REAL_HOME/.config/loq-control"
-        ui_ok "Battery history kept at $REAL_HOME/.local/share/loq-control/battery.db"
+        ui_ok "Config kept at $REAL_HOME/.config/vantage-linux"
+        ui_ok "Battery history kept at $REAL_HOME/.local/share/vantage-linux/battery.db"
     else
         ui_ok "Config, profiles, reports and battery history removed"
     fi

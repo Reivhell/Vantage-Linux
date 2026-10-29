@@ -4,32 +4,34 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::Ordering;
 use std::sync::{Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
-use sysinfo::{ProcessesToUpdate, System};
+use std::time::SystemTime;
+use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind, Users};
 
 use crate::battery;
 use crate::capabilities::{discover, Capabilities};
-use crate::config::{home_dir, save_config, AppConfig, CONFIG_DIR, HELPER_PATH};
+use crate::config::{home_dir, save_config, AppConfig, CONFIG_DIR};
 use crate::db;
 use crate::device;
 use crate::diagnostics;
 use crate::display;
-use crate::gpu::{detect_gpu_mode, gpu_label, gpu_modes, pending_gpu_switch, read_gpu_processes, GpuModeInfo, GpuProcessInfo};
+use crate::gpu::{
+    detect_gpu_mode, gpu_label, gpu_modes, pending_gpu_switch, read_gpu_processes, GpuModeInfo,
+    GpuProcessInfo,
+};
 use crate::gpu_ext;
 use crate::history;
-use crate::memory::{read_dimms, MemoryInfo};
+use crate::memory::{read_dimms, read_memory_overview, MemoryInfo};
 use crate::power::{
     find_attr_path, get_charge_mode, get_thermal_mode, read_sysfs_int, run_helper, set_charge_mode,
-    set_thermal_mode, ChargeModeInfo, PowerLimitAttr, SetLimitCmd, ThermalModeInfo, ATTR_LABELS,
-    ATTR_MAP, ATTR_UNITS,
+    set_thermal_mode, ChargeModeInfo, PowerLimitAttr, SetLimitCmd, ThermalModeInfo, ATTR_MAP,
 };
 use crate::presets;
 use crate::profiles;
-use crate::stats::{collect_stats, read_nvidia, SystemStats};
+use crate::resource_governor::ResourceGovernor;
+use crate::resource_types::{ResourceStatus, Rule};
+use crate::stats::{collect_stats, read_nvidia_cached, SystemStats};
 use crate::types::{ProcessInfo, SimpleResult};
 use crate::{AppState, REFRESH_MS};
-use crate::resource_governor::ResourceGovernor;
-use crate::resource_types::{Rule, ResourceStatus};
 
 static PROC_SYS: Mutex<Option<System>> = Mutex::new(None);
 
@@ -250,31 +252,64 @@ pub fn cmd_get_processes(filter: Option<String>, limit: Option<usize>) -> Vec<Pr
 
 pub(crate) fn collect_processes(filter: Option<&str>, limit: usize) -> Vec<ProcessInfo> {
     let mut guard = PROC_SYS.lock().unwrap();
-    let sys = guard.get_or_insert_with(System::new_all);
+    let sys = guard.get_or_insert_with(System::new);
     sys.refresh_cpu_all();
-    sys.refresh_processes(ProcessesToUpdate::All, true);
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing()
+            .with_memory()
+            .with_cpu()
+            .with_user(UpdateKind::OnlyIfNotSet),
+    );
+    let users = Users::new_with_refreshed_list();
+    let cores = sys.cpus().len().max(1) as f32;
+    let total_memory = sys.total_memory().max(1) as f64;
     let mut procs: Vec<ProcessInfo> = sys
         .processes()
         .iter()
         .map(|(pid, p)| {
             let mem_mb = p.memory() as f64 / 1024.0 / 1024.0;
+            let user = p
+                .user_id()
+                .map(|uid| {
+                    users
+                        .get_user_by_id(uid)
+                        .map(|user| user.name().to_string())
+                        .unwrap_or_else(|| uid.to_string())
+                })
+                .unwrap_or_else(|| "unknown".into());
             ProcessInfo {
                 pid: pid.as_u32() as i32,
+                parent_pid: p.parent().map(|pid| pid.as_u32() as i32),
                 name: p.name().to_string_lossy().to_string(),
-                user: p.user_id().map(|u| u.to_string()).unwrap_or_default(),
-                cpu: p.cpu_usage(),
+                user,
+                cpu: (p.cpu_usage() / cores).clamp(0.0, 100.0),
                 memory_mb: mem_mb,
+                memory_pct: (p.memory() as f64 / total_memory * 100.0) as f32,
+                status: format!("{:?}", p.status()),
+                threads: p.tasks().map(|t| t.len() as u32).unwrap_or(1),
+                start_time: p.start_time(),
             }
         })
         .collect();
     if let Some(f) = filter {
         let f = f.to_lowercase();
-        procs.retain(|p| p.name.to_lowercase().contains(&f) || p.pid.to_string().contains(&f));
+        procs.retain(|p| {
+            p.name.to_lowercase().contains(&f)
+                || p.pid.to_string().contains(&f)
+                || p.user.to_lowercase().contains(&f)
+        });
     }
     procs.sort_by(|a, b| {
-        b.memory_mb
-            .partial_cmp(&a.memory_mb)
+        b.cpu
+            .partial_cmp(&a.cpu)
             .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                b.memory_mb
+                    .partial_cmp(&a.memory_mb)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
     });
     procs.truncate(limit);
     procs
@@ -288,20 +323,41 @@ pub fn cmd_kill_process(pid: i32, force: bool) -> SimpleResult {
             message: "refusing to signal PID 1 or invalid PID".into(),
         };
     }
-    let signal = if force { "-KILL" } else { "-TERM" };
+    let signal = if force { "KILL" } else { "TERM" };
+    let pid_arg = pid.to_string();
     match Command::new("kill")
-        .arg(signal)
-        .arg(pid.to_string())
-        .status()
+        .arg(format!("-{signal}"))
+        .arg(&pid_arg)
+        .output()
     {
-        Ok(status) if status.success() => SimpleResult {
+        Ok(out) if out.status.success() => SimpleResult {
             ok: true,
-            message: format!("sent SIG{}", &signal[1..]),
+            message: format!("sent SIG{signal} to PID {pid}"),
         },
-        Ok(_) => SimpleResult {
-            ok: false,
-            message: "process not found or permission denied".into(),
-        },
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let lower = stderr.to_lowercase();
+            let denied = lower.contains("not permitted") || lower.contains("permission denied");
+            if denied {
+                // Root-owned process: retry through the privileged helper.
+                let res = run_helper("kill-process", &[&pid_arg, signal]);
+                if res.ok {
+                    return SimpleResult {
+                        ok: true,
+                        message: format!("sent SIG{signal} to PID {pid}"),
+                    };
+                }
+                return res;
+            }
+            SimpleResult {
+                ok: false,
+                message: if stderr.trim().is_empty() {
+                    format!("could not signal PID {pid}")
+                } else {
+                    stderr.trim().to_string()
+                },
+            }
+        }
         Err(e) => SimpleResult {
             ok: false,
             message: e.to_string(),
@@ -458,8 +514,19 @@ pub fn cmd_set_thermal_mode(state: tauri::State<AppState>, mode: String) -> Simp
 }
 
 pub fn memory_info() -> MemoryInfo {
-    let (_, used, total, _, _, _, _) = read_nvidia();
+    let (_, used, total, _, _, _, _) = read_nvidia_cached(2.0);
     let dimms = read_dimms();
+    let (
+        total_gb,
+        used_gb,
+        available_gb,
+        free_gb,
+        cached_gb,
+        swap_used_gb,
+        swap_total_gb,
+        pressure_some,
+        pressure_full,
+    ) = read_memory_overview();
     MemoryInfo {
         source: if dimms.is_empty() {
             "unavailable".into()
@@ -467,9 +534,17 @@ pub fn memory_info() -> MemoryInfo {
             "dmidecode".into()
         },
         dimms,
+        total_gb,
+        used_gb,
+        available_gb,
+        free_gb,
+        cached_gb,
+        swap_used_gb,
+        swap_total_gb,
+        pressure_some,
+        pressure_full,
         vram_used_mb: used,
         vram_total_mb: total,
-        top_processes: collect_processes(None, 8),
     }
 }
 
@@ -532,7 +607,7 @@ pub fn cmd_get_gpu_processes() -> Vec<GpuProcessInfo> {
 #[tauri::command]
 pub fn cmd_get_power_limits() -> Vec<PowerLimitAttr> {
     let now = SystemTime::now();
-    let mut guard = power_limit_cache().lock().unwrap();
+    let guard = power_limit_cache().lock().unwrap();
     if let Some((cached_at, entries)) = &guard.entries {
         if now
             .duration_since(*cached_at)
@@ -668,12 +743,14 @@ pub fn cmd_get_device_settings(state: tauri::State<'_, AppState>) -> DeviceSetti
     let fn_lock = fs::read_to_string("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/fn_lock")
         .map(|s| s.trim() == "1")
         .unwrap_or(false);
-    let camera = fs::read_to_string("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/camera_power")
-        .map(|s| s.trim() == "1")
-        .unwrap_or(true);
-    let usb_charging = fs::read_to_string("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/usb_charging")
-        .map(|s| s.trim() == "1")
-        .unwrap_or(false);
+    let camera =
+        fs::read_to_string("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/camera_power")
+            .map(|s| s.trim() == "1")
+            .unwrap_or(true);
+    let usb_charging =
+        fs::read_to_string("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/usb_charging")
+            .map(|s| s.trim() == "1")
+            .unwrap_or(false);
 
     let cfg = state.config.read().unwrap();
     DeviceSettingsState {
@@ -702,10 +779,22 @@ pub fn cmd_set_device_setting(
             if value {
                 let _ = crate::keyboard::cmd_keyboard_all(crate::keyboard::KeyboardAllCmd {
                     zones: vec![
-                        crate::keyboard::KeyboardZoneCmd { zone: 0, color: "#19C9E8".into() },
-                        crate::keyboard::KeyboardZoneCmd { zone: 1, color: "#168CFF".into() },
-                        crate::keyboard::KeyboardZoneCmd { zone: 2, color: "#168CFF".into() },
-                        crate::keyboard::KeyboardZoneCmd { zone: 3, color: "#19C9E8".into() },
+                        crate::keyboard::KeyboardZoneCmd {
+                            zone: 0,
+                            color: "#19C9E8".into(),
+                        },
+                        crate::keyboard::KeyboardZoneCmd {
+                            zone: 1,
+                            color: "#168CFF".into(),
+                        },
+                        crate::keyboard::KeyboardZoneCmd {
+                            zone: 2,
+                            color: "#168CFF".into(),
+                        },
+                        crate::keyboard::KeyboardZoneCmd {
+                            zone: 3,
+                            color: "#19C9E8".into(),
+                        },
                     ],
                     effect: "Static".into(),
                     brightness_pct: 100,
@@ -719,18 +808,27 @@ pub fn cmd_set_device_setting(
         }
         "camera" => {
             cfg.camera = Some(value);
-            let _ = fs::write("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/camera_power", val_str);
+            let _ = fs::write(
+                "/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/camera_power",
+                val_str,
+            );
         }
         "fn_lock" => {
             cfg.fn_lock = Some(value);
-            let _ = fs::write("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/fn_lock", val_str);
+            let _ = fs::write(
+                "/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/fn_lock",
+                val_str,
+            );
         }
         "win_key" => {
             cfg.win_key = Some(value);
         }
         "usb_charging" => {
             cfg.usb_charging = Some(value);
-            let _ = fs::write("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/usb_charging", val_str);
+            let _ = fs::write(
+                "/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/usb_charging",
+                val_str,
+            );
         }
         "vantage_key" => {
             cfg.vantage_key = Some(value);
@@ -799,7 +897,6 @@ pub fn cmd_delete_rule(state: tauri::State<'_, AppState>, id: String) -> SimpleR
         };
     }
     rules.retain(|r| r.id != id);
-    let kept = rules.clone();
     drop(rules);
     if let Err(e) = ResourceGovernor::save_rules(&rules_arc.read().unwrap()) {
         return SimpleResult {
@@ -826,7 +923,6 @@ pub fn cmd_toggle_rule(state: tauri::State<'_, AppState>, id: String) -> SimpleR
     };
     rule.enabled = !rule.enabled;
     let enabled = rule.enabled;
-    let kept = rules.clone();
     drop(rules);
     if let Err(e) = ResourceGovernor::save_rules(&rules_arc.read().unwrap()) {
         return SimpleResult {
@@ -836,7 +932,30 @@ pub fn cmd_toggle_rule(state: tauri::State<'_, AppState>, id: String) -> SimpleR
     }
     SimpleResult {
         ok: true,
-        message: format!("rule '{}' {}", id, if enabled { "enabled" } else { "disabled" }),
+        message: format!(
+            "rule '{}' {}",
+            id,
+            if enabled { "enabled" } else { "disabled" }
+        ),
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kill_process_rejects_pid_one() {
+        let result = cmd_kill_process(1, true);
+        assert!(!result.ok);
+    }
+
+    #[test]
+    fn kill_process_stops_child() {
+        let mut child = Command::new("sleep").arg("30").spawn().unwrap();
+        let result = cmd_kill_process(child.id() as i32, true);
+        assert!(result.ok, "{}", result.message);
+        let status = child.wait().unwrap();
+        assert!(!status.success());
+    }
+}

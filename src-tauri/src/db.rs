@@ -5,11 +5,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Lokasi database SQLite lokal (XDG-compliant: ~/.local/share/loq-control/battery.db).
+/// Lokasi database SQLite lokal (XDG-compliant: ~/.local/share/vantage-linux/battery.db).
 fn db_path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_default();
     Path::new(&home)
-        .join(".local/share/loq-control/battery.db")
+        .join(".local/share/vantage-linux/battery.db")
         .to_path_buf()
 }
 
@@ -93,42 +93,6 @@ impl DbPool {
         fs::write(&path, csv).map_err(|e| e.to_string())?;
         Ok(path.to_string_lossy().to_string())
     }
-
-    pub fn record_charge_event(
-        &self,
-        start_pct: f64,
-        end_pct: f64,
-        duration_min: f64,
-        energy_wh: f64,
-        rate_w: f64,
-    ) -> Result<(), String> {
-        let conn = self.lock().map_err(|e| e.to_string())?;
-        record_charge_event_inner(
-            &conn,
-            start_pct,
-            end_pct,
-            duration_min,
-            energy_wh,
-            rate_w,
-        )
-    }
-
-    /// Buang sample lebih lama dari `retention_seconds` lalu VACUUM.
-    pub fn prune_retention(&self, retention_seconds: f64) -> Result<(), String> {
-        let conn = self.lock().map_err(|e| e.to_string())?;
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs_f64();
-        let cutoff = now - retention_seconds;
-        conn.execute(
-            "DELETE FROM battery_samples WHERE timestamp < ?1",
-            params![cutoff],
-        )
-        .map_err(|e| e.to_string())?;
-        conn.execute_batch("VACUUM").map_err(|e| e.to_string())?;
-        Ok(())
-    }
 }
 
 pub fn open_conn() -> Result<Connection, String> {
@@ -153,17 +117,6 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
             plugged INTEGER
         );
         CREATE INDEX IF NOT EXISTS idx_battery_samples_ts ON battery_samples(timestamp);
-
-        CREATE TABLE IF NOT EXISTS charge_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp REAL NOT NULL,
-            start_pct REAL,
-            end_pct REAL,
-            duration_min REAL,
-            energy_wh REAL,
-            rate_w REAL
-        );
-        CREATE INDEX IF NOT EXISTS idx_charge_events_ts ON charge_events(timestamp);
         "#,
     )
     .map_err(|e| e.to_string())
@@ -281,6 +234,7 @@ pub struct BatterySample {
 }
 
 fn get_history_inner(conn: &Connection, seconds: f64) -> Result<Vec<BatterySample>, String> {
+    const MAX_POINTS: usize = 600;
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -313,6 +267,20 @@ fn get_history_inner(conn: &Connection, seconds: f64) -> Result<Vec<BatterySampl
     let mut out = Vec::new();
     for r in rows {
         out.push(r.map_err(|e| e.to_string())?);
+    }
+
+    // Grafik baterai tidak butuh puluhan ribu titik untuk window 30 hari.
+    let len = out.len();
+    let step = (len + MAX_POINTS - 1) / MAX_POINTS;
+    if step > 1 {
+        let mut sampled = Vec::with_capacity(len / step + 1);
+        let mut iter = out.into_iter().enumerate().peekable();
+        while let Some((index, sample)) = iter.next() {
+            if index % step == 0 || iter.peek().is_none() {
+                sampled.push(sample);
+            }
+        }
+        out = sampled;
     }
     Ok(out)
 }
@@ -378,28 +346,6 @@ fn get_rate_inner(conn: &Connection, window_seconds: f64) -> Result<Option<f64>,
     }
     let last = samples.last().unwrap();
     Ok(last.1)
-}
-
-#[allow(dead_code)]
-fn record_charge_event_inner(
-    conn: &Connection,
-    start_pct: f64,
-    end_pct: f64,
-    duration_min: f64,
-    energy_wh: f64,
-    rate_w: f64,
-) -> Result<(), String> {
-    let ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs_f64();
-    conn.execute(
-        "INSERT INTO charge_events (timestamp, start_pct, end_pct, duration_min, energy_wh, rate_w)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![ts, start_pct, end_pct, duration_min, energy_wh, rate_w],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
 }
 
 pub fn export_csv_inner(conn: &Connection, _path: &Path) -> Result<String, String> {
@@ -520,7 +466,6 @@ mod tests {
             .map(|r| r.unwrap())
             .collect();
         assert!(tables.contains(&"battery_samples".to_string()));
-        assert!(tables.contains(&"charge_events".to_string()));
     }
 
     #[test]
@@ -568,6 +513,27 @@ mod tests {
     }
 
     #[test]
+    fn test_battery_history_downsamples_large_window() {
+        let conn = test_conn();
+        init_test_conn(&conn);
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+        for i in 0..2000 {
+            conn.execute(
+                "INSERT INTO battery_samples (timestamp, percent) VALUES (?1, ?2)",
+                params![now - 2000.0 + i as f64, (i % 100) as f64],
+            )
+            .unwrap();
+        }
+        let hist = get_history_inner(&conn, 3600.0).unwrap();
+        assert!(hist.len() <= 601);
+        assert!(hist.len() > 400);
+        assert_eq!(hist.last().and_then(|s| s.percent), Some(99.0));
+    }
+
+    #[test]
     fn test_get_latest_trend() {
         let conn = test_conn();
         init_test_conn(&conn);
@@ -608,7 +574,7 @@ mod tests {
             Some(true),
         )
         .unwrap();
-        let csv = export_csv_inner(&conn, Path::new("/tmp/loq_test.csv")).unwrap();
+        let csv = export_csv_inner(&conn, Path::new("/tmp/vantage_test.csv")).unwrap();
         assert!(csv.starts_with("timestamp,percent,health_pct,cycles,"));
         assert!(csv.contains("90"));
         assert!(csv.contains("95"));
@@ -655,44 +621,10 @@ mod tests {
     }
 
     #[test]
-    fn test_record_charge_event() {
-        let conn = test_conn();
-        init_test_conn(&conn);
-        record_charge_event_inner(&conn, 30.0, 80.0, 60.0, 25.0, 25.0).unwrap();
-        let mut stmt = conn.prepare("SELECT COUNT(*) FROM charge_events").unwrap();
-        let count: u64 = stmt.query_row([], |row| row.get(0)).unwrap();
-        assert_eq!(count, 1);
-    }
-
-    #[test]
     fn test_export_path_expands_home() {
         let home = std::env::var("HOME").unwrap_or_default();
         let expanded = expand_home(Path::new("~/battery.csv"));
         assert!(expanded.starts_with(&home));
         assert!(expanded.ends_with("battery.csv"));
-    }
-
-    #[test]
-    fn test_prune_retention_removes_old_samples() {
-        let conn = test_conn();
-        init_test_conn(&conn);
-        // Insert two samples with controlled timestamps via raw SQL to simulate age.
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs_f64();
-        conn.execute(
-            "INSERT INTO battery_samples (timestamp, percent) VALUES (?1, ?2), (?3, ?4)",
-            params![now - 100000.0, 90.0, now - 10.0, 80.0],
-        )
-        .unwrap();
-        let pool = DbPool {
-            conn: Mutex::new(conn),
-        };
-        // Retention 1 hour -> the 100000s-old sample is pruned, the recent one stays.
-        pool.prune_retention(3600.0).unwrap();
-        let hist = pool.get_history(86400.0).unwrap();
-        assert_eq!(hist.len(), 1);
-        assert_eq!(hist[0].percent, Some(80.0));
     }
 }

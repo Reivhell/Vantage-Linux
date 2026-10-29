@@ -1,20 +1,25 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::process::Command;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-use crate::config::HELPER_PATH;
-use crate::power::run_helper;
-use crate::stats::{
-    find_hwmon, read_cpu_temp, read_fan_rpms, read_gpu_temp_sysfs,
-};
+use crate::power::{run_helper, run_helper_quiet};
+use crate::stats::{find_hwmon, read_cpu_temp, read_fan_rpms, read_nvidia_cached};
 use crate::types::SimpleResult;
 
-// ---------------------------------------------------------------------------
-// Fan control
-// ---------------------------------------------------------------------------
+const FAN_MODE_CANDIDATES: &[&str] = &[
+    "/sys/devices/pci0000:00/0000:00:1f.0/PNP0C09:00/VPC2004:00/fan_mode",
+    "/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/fan_mode",
+];
 
-#[derive(Debug, Serialize, Deserialize)]
+const FAN_MODES: [(u8, &str, &str); 4] = [
+    (0, "silent", "Super Silent"),
+    (1, "standard", "Standard"),
+    (2, "dust", "Dust Cleaning"),
+    (4, "cooling", "Efficient Cooling"),
+];
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FanCurvePoint {
     pub temp: i32,
     pub pwm: i32,
@@ -26,239 +31,217 @@ pub struct FanCurveCmd {
     pub points: Vec<FanCurvePoint>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FanModeInfo {
+    pub key: String,
+    pub label: String,
+    pub value: u8,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FanInfo {
     pub available: bool,
+    pub mode_control: bool,
+    pub pwm_control: bool,
     pub fan_count: u32,
     pub max_points: usize,
     pub temp_max: i32,
     pub pwm_max: i32,
     pub default_curve: Vec<FanCurvePoint>,
+    pub modes: Vec<FanModeInfo>,
 }
 
-/// Status kipas yang diexpose ke frontend.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FanStatus {
     pub available: bool,
+    pub mode_control: bool,
+    pub pwm_control: bool,
+    pub rpm_read: bool,
     pub firmware_reset: bool,
     pub manual_active: bool,
-    pub fan1_rpm: u32,
-    pub fan2_rpm: u32,
+    pub fan1_rpm: Option<u32>,
+    pub fan2_rpm: Option<u32>,
+    pub mode: String,
+    pub mode_label: String,
     pub throttle_alert: bool,
 }
 
-/// Apa yang terakhir kali diterapkan ke kipas.
-#[derive(Debug, Clone)]
-struct FanApplied {
-    mode: String, // "manual", "curve", "auto"
-    pwm: i32,
-    zero_rpm_count: u32,
+static LAST_APPLIED_MODE: OnceLock<Mutex<Option<u8>>> = OnceLock::new();
+static ORIGINAL_MODE: OnceLock<Mutex<Option<u8>>> = OnceLock::new();
+
+fn last_applied() -> &'static Mutex<Option<u8>> {
+    LAST_APPLIED_MODE.get_or_init(|| Mutex::new(None))
 }
 
-static FAN_STATE: OnceLock<Mutex<HashMap<i32, FanApplied>>> = OnceLock::new();
-static FIRMWARE_RESET: OnceLock<Mutex<bool>> = OnceLock::new();
-static THROTTLE_ALERTED: OnceLock<Mutex<bool>> = OnceLock::new();
-
-fn fan_state() -> &'static Mutex<HashMap<i32, FanApplied>> {
-    FAN_STATE.get_or_init(|| Mutex::new(HashMap::new()))
+fn original_mode() -> &'static Mutex<Option<u8>> {
+    ORIGINAL_MODE.get_or_init(|| Mutex::new(None))
 }
 
-fn fan_reset_test_state() {
-    *firmware_reset_flag().lock().unwrap() = false;
-    fan_state().lock().unwrap().clear();
+fn fan_mode_path() -> Option<PathBuf> {
+    FAN_MODE_CANDIDATES
+        .iter()
+        .map(PathBuf::from)
+        .find(|path| Path::new(path).is_file())
 }
 
-fn firmware_reset_flag() -> &'static Mutex<bool> {
-    FIRMWARE_RESET.get_or_init(|| Mutex::new(false))
+fn mode_control_available() -> bool {
+    fan_mode_path().is_some()
 }
 
-fn throttle_alerted() -> &'static Mutex<bool> {
-    THROTTLE_ALERTED.get_or_init(|| Mutex::new(false))
+fn pwm_control_available() -> bool {
+    find_hwmon()
+        .map(|path| path.join("pwm1").exists() || path.join("pwm2").exists())
+        .unwrap_or(false)
 }
 
-/// Kembalikan kontrol kipas ke firmware saat proses berhenti (fail-safe).
-pub fn fan_fail_safe() {
-    for id in [1i32, 2] {
-        for program in ["sudo", "pkexec"] {
-            let mut cmd = Command::new(program);
-            if program == "sudo" {
-                cmd.arg("-n");
-            }
-            cmd.arg(HELPER_PATH).arg("fan-auto").arg(id.to_string());
-            let _ = cmd.output();
-        }
+fn read_mode_raw() -> Option<u8> {
+    let value = fs::read_to_string(fan_mode_path()?).ok()?;
+    value.trim().parse::<u8>().ok()
+}
+
+fn mode_value(key: &str) -> Option<u8> {
+    let key = key.trim().to_lowercase().replace(['_', ' '], "-");
+    match key.as_str() {
+        "silent" | "quiet" | "super-silent" => Some(0),
+        "standard" | "auto" | "balanced" | "normal" => Some(1),
+        "dust" | "dust-cleaning" => Some(2),
+        "cooling" | "performance" | "full" | "max" => Some(4),
+        _ => None,
     }
-    *firmware_reset_flag().lock().unwrap() = false;
 }
 
-/// Tandai bahwa firmware telah mengembalikan kipas ke curve bawaan.
-pub fn fan_mark_firmware_reset() {
-    *firmware_reset_flag().lock().unwrap() = true;
-}
-
-pub fn fan_is_firmware_reset() -> bool {
-    *firmware_reset_flag().lock().unwrap()
-}
-
-/// Catat penggunaan manual kipas untuk deteksi reset firmware.
-pub fn fan_record_applied(fan_id: i32, mode: &str, pwm: i32) {
-    let mut guard = fan_state().lock().unwrap();
-    guard.insert(
-        fan_id,
-        FanApplied {
-            mode: mode.to_string(),
-            pwm,
-            zero_rpm_count: 0,
-        },
-    );
-}
-
-/// Periksa apakah kipas yang diatur manual tidak berputar (firmeware reset).
-/// Dipanggil setiap siklus monitoring. Jika manual PWM > 0 tapi RPM 0 beberapa kali,
-/// anggap firmware telah mengambil alih kembali.
-pub fn fan_check_reset(fan_id: i32, rpm: u32) {
-    let mut guard = fan_state().lock().unwrap();
-    let entry = match guard.get_mut(&fan_id) {
-        Some(e) => e,
-        None => return,
-    };
-    if entry.mode == "manual" && entry.pwm > 0 {
-        if rpm == 0 {
-            entry.zero_rpm_count += 1;
-            if entry.zero_rpm_count >= 3 {
-                fan_mark_firmware_reset();
-                entry.zero_rpm_count = 0;
-            }
-        } else {
-            entry.zero_rpm_count = 0;
-        }
+fn mode_label(value: Option<u8>) -> (String, String) {
+    match value {
+        Some(0) => ("silent".into(), "Super Silent".into()),
+        Some(1) => ("standard".into(), "Standard".into()),
+        Some(2) => ("dust".into(), "Dust Cleaning".into()),
+        Some(4) => ("cooling".into(), "Efficient Cooling".into()),
+        Some(other) => ("unknown".into(), format!("Firmware ({other})")),
+        None => ("unknown".into(), "Tidak tersedia".into()),
     }
+}
+
+fn modes() -> Vec<FanModeInfo> {
+    FAN_MODES
+        .iter()
+        .map(|(value, key, label)| FanModeInfo {
+            key: (*key).into(),
+            label: (*label).into(),
+            value: *value,
+        })
+        .collect()
 }
 
 #[tauri::command]
 pub fn cmd_get_fan_info() -> FanInfo {
+    let (fan1, fan2) = read_fan_rpms();
     FanInfo {
-        available: find_hwmon().is_some(),
-        fan_count: 2,
-        max_points: 10,
+        available: mode_control_available() || pwm_control_available(),
+        mode_control: mode_control_available(),
+        pwm_control: pwm_control_available(),
+        fan_count: fan1.is_some() as u32 + fan2.is_some() as u32,
+        max_points: if pwm_control_available() { 10 } else { 0 },
         temp_max: 110,
         pwm_max: 100,
-        default_curve: vec![
-            FanCurvePoint { temp: 45, pwm: 25 },
-            FanCurvePoint { temp: 60, pwm: 45 },
-            FanCurvePoint { temp: 75, pwm: 70 },
-            FanCurvePoint { temp: 88, pwm: 100 },
-        ],
+        default_curve: Vec::new(),
+        modes: modes(),
     }
 }
 
 #[tauri::command]
 pub fn cmd_fan_status() -> FanStatus {
     let (fan1, fan2) = read_fan_rpms();
-    let cpu_temp = read_cpu_temp();
-    // Throttle jika CPU >= 95 °C. GPU temp dibaca dari sysfs jika tersedia.
-    let gpu_temp = read_gpu_temp_sysfs();
-    let throttle = cpu_temp.map_or(false, |t| t >= 95.0)
-        || gpu_temp.map_or(false, |t| t >= 100.0);
-
-    // Debounce throttle alert agar tidak spam.
-    {
-        let mut alerted = throttle_alerted().lock().unwrap();
-        if throttle {
-            *alerted = true;
-        } else {
-            *alerted = false;
-        }
-    }
-
-    // Deteksi reset pada kedua kipas.
-    fan_check_reset(1, fan1);
-    fan_check_reset(2, fan2);
-
-    let mut guard = fan_state().lock().unwrap();
-    let manual_active = guard.values().any(|e| e.mode == "manual" && e.pwm > 0);
-    drop(guard);
+    let raw_mode = read_mode_raw();
+    let (mode, label) = mode_label(raw_mode);
+    let cpu = read_cpu_temp();
+    let gpu = read_nvidia_cached(2.0).3.map(|v| v as f32);
+    let throttle = cpu.map_or(false, |t| t >= 95.0) || gpu.map_or(false, |t| t >= 100.0);
+    let applied = *last_applied().lock().unwrap();
 
     FanStatus {
-        available: find_hwmon().is_some(),
-        firmware_reset: fan_is_firmware_reset(),
-        manual_active,
+        available: mode_control_available() || pwm_control_available(),
+        mode_control: mode_control_available(),
+        pwm_control: pwm_control_available(),
+        rpm_read: fan1.is_some() || fan2.is_some(),
+        firmware_reset: false,
+        manual_active: applied.is_some(),
         fan1_rpm: fan1,
         fan2_rpm: fan2,
+        mode,
+        mode_label: label,
         throttle_alert: throttle,
     }
 }
 
-#[derive(Debug, Deserialize)]
-pub struct FanProfileCmd {
-    pub profile: String, // "auto", "quiet", "full"
-    pub fan_id: i32,
+#[tauri::command]
+pub fn cmd_set_fan_mode(mode: String) -> SimpleResult {
+    let Some(value) = mode_value(&mode) else {
+        return SimpleResult {
+            ok: false,
+            message: format!("mode kipas '{mode}' tidak didukung"),
+        };
+    };
+    if !mode_control_available() {
+        return SimpleResult {
+            ok: false,
+            message: "kontrol mode kipas tidak tersedia di firmware ini".into(),
+        };
+    }
+
+    let before = read_mode_raw().filter(|v| FAN_MODES.iter().any(|(m, _, _)| m == v));
+    if before.is_some() {
+        let mut original = original_mode().lock().unwrap();
+        if original.is_none() {
+            *original = before;
+        }
+    }
+
+    let result = run_helper("fan-mode", &[&value.to_string()]);
+    if result.ok {
+        *last_applied().lock().unwrap() = Some(value);
+    }
+    result
 }
 
 #[tauri::command]
 pub fn cmd_apply_fan_profile(cmd: FanProfileCmd) -> SimpleResult {
+    cmd_set_fan_mode(cmd.profile)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FanProfileCmd {
+    pub profile: String,
+}
+
+#[tauri::command]
+pub fn cmd_apply_fan_curve(cmd: FanCurveCmd) -> SimpleResult {
+    if !pwm_control_available() {
+        return SimpleResult {
+            ok: false,
+            message: "hardware ini tidak menyediakan kontrol PWM/kurva kipas".into(),
+        };
+    }
     if cmd.fan_id != 1 && cmd.fan_id != 2 {
         return SimpleResult {
             ok: false,
             message: "fan_id must be 1 or 2".into(),
         };
     }
-    let profile = cmd.profile.to_lowercase();
-    let res = match profile.as_str() {
-        "auto" => {
-            let r = run_helper("fan-auto", &[cmd.fan_id.to_string().as_str()]);
-            if r.ok {
-                fan_record_applied(cmd.fan_id, "auto", 0);
-            }
-            r
-        }
-        "quiet" => {
-            // Curve rendah: 45°C=25%, 60°C=35%, 75°C=50%, 90°C=75%
-            let points = vec![
-                FanCurvePoint { temp: 45, pwm: 25 },
-                FanCurvePoint { temp: 60, pwm: 35 },
-                FanCurvePoint { temp: 75, pwm: 50 },
-                FanCurvePoint { temp: 90, pwm: 75 },
-            ];
-            let payload = serde_json::to_string(&points).unwrap_or_default();
-            let r = run_helper(
-                "fan-curve",
-                &[cmd.fan_id.to_string().as_str(), &payload],
-            );
-            if r.ok {
-                fan_record_applied(cmd.fan_id, "curve", 0);
-            }
-            r
-        }
-        "full" => {
-            // Paksa 100% via manual (fail-safe masih aktif saat daemon mati).
-            let r = run_helper(
-                "fan-manual",
-                &[cmd.fan_id.to_string().as_str(), "100"],
-            );
-            if r.ok {
-                fan_record_applied(cmd.fan_id, "manual", 100);
-            }
-            r
-        }
-        _ => SimpleResult {
-            ok: false,
-            message: format!("fan profile '{}' not supported (auto/quiet/full)", profile),
-        },
-    };
-    res
-}
-
-#[tauri::command]
-pub fn cmd_apply_fan_curve(cmd: FanCurveCmd) -> SimpleResult {
-    if cmd.fan_id != 1 && cmd.fan_id != 2 {
-        return SimpleResult { ok: false, message: "fan_id must be 1 or 2".into() };
-    }
     if cmd.points.len() < 2 || cmd.points.len() > 10 {
-        return SimpleResult { ok: false, message: "expected 2–10 curve points".into() };
+        return SimpleResult {
+            ok: false,
+            message: "expected 2–10 curve points".into(),
+        };
     }
-    if cmd.points.iter().any(|p| !(0..=110).contains(&p.temp) || !(0..=100).contains(&p.pwm)) {
-        return SimpleResult { ok: false, message: "temp 0–110 °C, speed 0–100 % required".into() };
+    if cmd
+        .points
+        .iter()
+        .any(|p| !(0..=110).contains(&p.temp) || !(0..=100).contains(&p.pwm))
+    {
+        return SimpleResult {
+            ok: false,
+            message: "temp 0–110 °C, speed 0–100 % required".into(),
+        };
     }
     let mut points = cmd.points;
     points.sort_by_key(|p| p.temp);
@@ -268,21 +251,63 @@ pub fn cmd_apply_fan_curve(cmd: FanCurveCmd) -> SimpleResult {
 
 #[tauri::command]
 pub fn cmd_set_fan_manual(fan_id: i32, pwm_percent: i32) -> SimpleResult {
+    if !pwm_control_available() {
+        return SimpleResult {
+            ok: false,
+            message: "hardware ini tidak menyediakan kontrol PWM kipas".into(),
+        };
+    }
     if fan_id != 1 && fan_id != 2 {
-        return SimpleResult { ok: false, message: "fan_id must be 1 or 2".into() };
+        return SimpleResult {
+            ok: false,
+            message: "fan_id must be 1 or 2".into(),
+        };
     }
     run_helper(
         "fan-manual",
-        &[fan_id.to_string().as_str(), pwm_percent.clamp(0, 100).to_string().as_str()],
+        &[
+            fan_id.to_string().as_str(),
+            pwm_percent.clamp(0, 100).to_string().as_str(),
+        ],
     )
 }
 
 #[tauri::command]
 pub fn cmd_fan_auto(fan_id: i32) -> SimpleResult {
+    if mode_control_available() {
+        return cmd_set_fan_mode("standard".into());
+    }
+    if !pwm_control_available() {
+        return SimpleResult {
+            ok: false,
+            message: "kontrol kipas tidak tersedia".into(),
+        };
+    }
     if fan_id != 1 && fan_id != 2 {
-        return SimpleResult { ok: false, message: "fan_id must be 1 or 2".into() };
+        return SimpleResult {
+            ok: false,
+            message: "fan_id must be 1 or 2".into(),
+        };
     }
     run_helper("fan-auto", &[fan_id.to_string().as_str()])
+}
+
+/// Kembalikan mode kipas ke kondisi awal saat aplikasi berhenti.
+pub fn fan_fail_safe() {
+    if last_applied().lock().unwrap().is_none() {
+        return;
+    }
+    if !mode_control_available() {
+        return;
+    }
+    let restore = original_mode()
+        .lock()
+        .unwrap()
+        .filter(|v| FAN_MODES.iter().any(|(m, _, _)| m == v))
+        .unwrap_or(1);
+    let _ = run_helper_quiet("fan-mode", &[&restore.to_string()]);
+    *last_applied().lock().unwrap() = None;
+    *original_mode().lock().unwrap() = None;
 }
 
 #[cfg(test)]
@@ -290,24 +315,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_fan_record_and_reset_detection() {
-        fan_reset_test_state();
-        // RPM 0 dengan manual PWM > 0 tiga kali -> firmware reset.
-        fan_record_applied(1, "manual", 80);
-        fan_check_reset(1, 0);
-        fan_check_reset(1, 0);
-        assert!(!fan_is_firmware_reset());
-        fan_check_reset(1, 0);
-        assert!(fan_is_firmware_reset());
+    fn fan_mode_aliases_are_validated() {
+        assert_eq!(mode_value("silent"), Some(0));
+        assert_eq!(mode_value("auto"), Some(1));
+        assert_eq!(mode_value("performance"), Some(4));
+        assert_eq!(mode_value("dust cleaning"), Some(2));
+        assert_eq!(mode_value("custom"), None);
     }
 
     #[test]
-    fn test_rpm_recovery_clears_reset() {
-        fan_reset_test_state();
-        fan_record_applied(2, "manual", 60);
-        fan_check_reset(2, 0);
-        fan_check_reset(2, 0);
-        fan_check_reset(2, 2000);
-        assert!(!fan_is_firmware_reset());
+    fn mode_labels_are_human_readable() {
+        assert_eq!(mode_label(Some(0)).1, "Super Silent");
+        assert_eq!(mode_label(Some(4)).0, "cooling");
+        assert_eq!(mode_label(Some(133)).0, "unknown");
     }
 }

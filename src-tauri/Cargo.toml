@@ -1,5 +1,5 @@
 [package]
-name = "loq-control"
+name = "vantage-linux"
 version = "0.1.0"
 edition = "2021"
 
@@ -18,11 +18,11 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tauri-build = { version = "2", features = [] }
 
 [[bin]]
-name = "loq-control"
+name = "vantage-linux"
 path = "src/main.rs"
 
 [[bin]]
-name = "loq-helper"
-path = "src/bin/loq-helper.rs"
+name = "vantage-helper"
+path = "src/bin/vantage-helper.rs"
 
 [target.'cfg(target_os = "linux")'.dependencies]

@@ -384,7 +384,7 @@ pub fn smart_scan() -> SmartScan {
 }
 
 pub fn export_report(device: &DeviceInfo, report: &DiagnosticsReport) -> Result<String, String> {
-    let dir = crate::home_dir().join(".local/state/loq-control");
+    let dir = crate::home_dir().join(".local/state/vantage-linux");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -392,7 +392,7 @@ pub fn export_report(device: &DeviceInfo, report: &DiagnosticsReport) -> Result<
         .as_secs();
     let path = dir.join(format!("diagnostics-{stamp}.md"));
     let mut text = String::new();
-    text.push_str("# LOQ Control Center diagnostics\n\n");
+    text.push_str("# Vantage Linux diagnostics\n\n");
     text.push_str(&format!("Generated: {stamp}\n\n"));
     text.push_str("## Device\n\n");
     text.push_str(&format!(

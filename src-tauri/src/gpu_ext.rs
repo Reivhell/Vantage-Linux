@@ -3,6 +3,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
+use crate::stats::nvidia_driver_present;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GpuDetails {
     pub nvidia_available: bool,
@@ -59,6 +61,10 @@ pub fn read_gpu_details() -> GpuDetails {
         details.runtime_control = fs::read_to_string(pci.join("power/control"))
             .map(|v| v.trim().to_string())
             .unwrap_or_default();
+    }
+
+    if !nvidia_driver_present() {
+        return details;
     }
 
     let output = Command::new("nvidia-smi")

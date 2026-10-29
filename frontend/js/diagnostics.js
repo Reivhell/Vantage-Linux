@@ -51,7 +51,7 @@ export function initDiagnostics() {
       if ($("scan-last-time")) $("scan-last-time").textContent = `Terakhir diperiksa: ${ts}`;
 
       renderDiagChecklist(latestReport);
-      toast(`Pemindaian selesai. Skor kesehatan: ${latestReport.score || 95}/100`);
+      toast(`Pemindaian selesai. Skor kesehatan: ${latestReport.score ?? "--"}/100`);
     } catch (e) {
       toast(String(e), true);
     } finally {
@@ -90,7 +90,7 @@ export function initDiagnostics() {
       .join("");
 
     showModal(
-      `Laporan Diagnostik Sistem (${latestReport.score || 95}/100)`,
+      `Laporan Diagnostik Sistem (${latestReport.score ?? "--"}/100)`,
       `<div style="max-height: 380px; overflow-y: auto;">
          ${checksHtml || '<p style="color: var(--text-muted);">Semua modul hardware beroperasi normal.</p>'}
        </div>

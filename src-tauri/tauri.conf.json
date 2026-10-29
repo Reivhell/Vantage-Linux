@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Vantage",
+  "productName": "Vantage Linux",
   "version": "0.1.0",
-  "identifier": "com.github.loqcontrol",
+  "identifier": "com.github.vantagelinux",
   "build": {
     "frontendDist": "../frontend"
   },
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Vantage",
+        "title": "Vantage Linux",
         "width": 1280,
         "height": 850,
         "minWidth": 1024,

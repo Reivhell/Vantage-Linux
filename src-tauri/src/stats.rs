@@ -14,6 +14,10 @@ static MONITOR_SYS: Mutex<Option<System>> = Mutex::new(None);
 static LAST_DISK_TIME: Mutex<Option<f64>> = Mutex::new(None);
 static LAST_NET: Mutex<Option<(String, u64, u64, f64)>> = Mutex::new(None);
 static MOUNTS_CACHE: Mutex<Option<(f64, Vec<DiskMount>)>> = Mutex::new(None);
+static LAST_HISTORY_PUSH: Mutex<f64> = Mutex::new(0.0);
+static HWMON_CACHE: Mutex<Option<(f64, Vec<(String, PathBuf)>)>> = Mutex::new(None);
+static IP_CACHE: Mutex<Option<(String, String, f64)>> = Mutex::new(None);
+static NVIDIA_CACHE: Mutex<Option<(f64, NvidiaReadings)>> = Mutex::new(None);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemStats {
@@ -24,6 +28,9 @@ pub struct SystemStats {
     pub cpu_temp: Option<f32>,
     pub ram_used_gb: f64,
     pub ram_total_gb: f64,
+    pub ram_available_gb: f64,
+    pub ram_free_gb: f64,
+    pub ram_cached_gb: f64,
     pub ram_percent: f32,
     pub swap_used_gb: f64,
     pub swap_total_gb: f64,
@@ -41,7 +48,13 @@ pub struct SystemStats {
     pub igpu_util: Option<f32>,
     pub fan1_rpm: u32,
     pub fan2_rpm: u32,
+    pub fan1_available: bool,
+    pub fan2_available: bool,
     pub ssd_temp: Option<f32>,
+    pub ram_temp: Option<f32>,
+    pub wifi_temp: Option<f32>,
+    pub board_temp: Option<f32>,
+    pub thermal: Vec<ThermalSensor>,
     pub net_rx_kbps: f64,
     pub net_tx_kbps: f64,
     pub net_interface: String,
@@ -53,7 +66,17 @@ pub struct SystemStats {
     pub battery_cycles: Option<u32>,
     pub battery_status: String,
     pub battery_power_w: Option<f64>,
+    pub battery_energy_now_wh: Option<f64>,
+    pub battery_energy_full_wh: Option<f64>,
     pub view: StatsView,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThermalSensor {
+    pub id: String,
+    pub label: String,
+    pub temp_c: Option<f32>,
+    pub source: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -113,6 +136,7 @@ pub struct StatsView {
     pub swap: String,
     pub gpu_percent: String,
     pub gpu_temp: String,
+    pub gpu_freq: String,
     pub gpu_power: String,
     pub gpu_vram: String,
     pub gpu_fan: String,
@@ -123,7 +147,9 @@ pub struct StatsView {
     pub battery_power: String,
     pub fan_rpm: String,
     pub battery: String,
+    pub battery_time: String,
     pub ac_state: String,
+    pub net_status: String,
     pub net_interface: String,
     pub net_ip: String,
     pub net_rx: String,
@@ -149,8 +175,18 @@ pub struct DiskMount {
 }
 
 pub fn collect_stats() -> SystemStats {
+    collect_stats_inner(true)
+}
+
+/// Tanpa `StatsView`: dipakai monitor saat window disembunyikan, supaya
+/// string/array untuk UI tidak dibentuk tiap detik.
+pub(crate) fn collect_stats_raw() -> SystemStats {
+    collect_stats_inner(false)
+}
+
+fn collect_stats_inner(include_view: bool) -> SystemStats {
     let mut sys_guard = MONITOR_SYS.lock().unwrap();
-    let sys = sys_guard.get_or_insert_with(System::new_all);
+    let sys = sys_guard.get_or_insert_with(System::new);
     sys.refresh_cpu_all();
     sys.refresh_memory();
 
@@ -174,6 +210,9 @@ pub fn collect_stats() -> SystemStats {
 
     let mem_used = sys.used_memory() as f64 / 1e9;
     let mem_total = sys.total_memory() as f64 / 1e9;
+    let mem_available = sys.available_memory() as f64 / 1e9;
+    let mem_free = sys.free_memory() as f64 / 1e9;
+    let mem_cached = read_meminfo_kb(&["Cached", "SReclaimable", "Buffers"]) * 1024.0 / 1e9;
     let ram_percent = if mem_total > 0.0 {
         (mem_used / mem_total * 100.0) as f32
     } else {
@@ -195,29 +234,78 @@ pub fn collect_stats() -> SystemStats {
     };
     let (disk_read, disk_write, disk_busy) = disk_io_delta();
     let nvidia = read_nvidia();
+    let gpu_temp = nvidia
+        .3
+        .or_else(|| read_gpu_temp_sysfs().map(|v| v.round() as u32));
     let igpu_util = read_igpu_util();
-    let (fan1, fan2) = read_fan_rpms();
+    let (fan1_opt, fan2_opt) = read_fan_rpms();
+    let fan1 = fan1_opt.unwrap_or(0);
+    let fan2 = fan2_opt.unwrap_or(0);
     let (plugged, bat_pct) = read_power_supply();
-    let (bat_health, bat_cycles, bat_status, bat_power) = read_battery_details();
+    let (bat_health, bat_cycles, bat_status, bat_power, bat_energy_now, bat_energy_full) =
+        read_battery_details();
     let (net_rx, net_tx, iface, ip, wifi) = read_net_dev();
     let ssd_temp = read_ssd_temp();
+    let ram_temp = read_named_hwmon_temp("spd5118", None);
+    let wifi_temp = read_named_hwmon_temp("iwlwifi", None);
+    let board_temp = read_board_temp();
+    let gpu_source = if nvidia.3.is_some() {
+        "nvidia-smi"
+    } else {
+        "hwmon/nvidia"
+    };
+    let thermal = if include_view {
+        read_thermal_sensors(
+            cpu_temp, gpu_temp, ssd_temp, ram_temp, wifi_temp, board_temp, gpu_source,
+        )
+    } else {
+        Vec::new()
+    };
 
-    // Push ke histori metrik untuk grafik 1m/15m/1h/24h.
-    history::history_push("cpu_percent", cpu_percent as f64);
-    history::history_push("ram_percent", ram_percent as f64);
-    history::history_push("cpu_temp", cpu_temp.unwrap_or(0.0) as f64);
-    history::history_push("gpu_temp", nvidia.3.map(|v| v as f64).unwrap_or(0.0));
-    history::history_push("fan1_rpm", fan1 as f64);
-    history::history_push("gpu_power_w", nvidia.4.unwrap_or(0.0));
-    history::history_push("disk_read_kbps", disk_read);
-    history::history_push("disk_write_kbps", disk_write);
-    history::history_push("gpu_util", nvidia.0.unwrap_or(0) as f64);
-    history::history_push("net_kbps", net_rx + net_tx);
-    if let Some(p) = bat_pct {
-        history::history_push("battery_percent", p as f64);
-    }
-    if let Some(pw) = nvidia.4 {
-        history::history_push("gpu_power_w", pw);
+    // Push ke histori metrik untuk grafik 1m/15m/1h/24h. Cukup 1 titik/5 detik;
+    // data 1 detik penuh tidak terlihat di grafik dan memakan RAM besar.
+    let history_due = {
+        let mut last = LAST_HISTORY_PUSH.lock().unwrap();
+        if timestamp - *last >= 5.0 {
+            *last = timestamp;
+            true
+        } else {
+            false
+        }
+    };
+    if history_due {
+        history::history_push("cpu_percent", cpu_percent as f64);
+        history::history_push("ram_percent", ram_percent as f64);
+        if let Some(v) = cpu_temp {
+            history::history_push("cpu_temp", v as f64);
+        }
+        if let Some(v) = gpu_temp {
+            history::history_push("gpu_temp", v as f64);
+        }
+        if let Some(v) = ssd_temp {
+            history::history_push("ssd_temp", v as f64);
+        }
+        if let Some(v) = ram_temp {
+            history::history_push("ram_temp", v as f64);
+        }
+        if let Some(v) = wifi_temp {
+            history::history_push("wifi_temp", v as f64);
+        }
+        if let Some(v) = fan1_opt {
+            history::history_push("fan1_rpm", v as f64);
+        }
+        history::history_push("disk_read_kbps", disk_read);
+        history::history_push("disk_write_kbps", disk_write);
+        if let Some(v) = nvidia.0 {
+            history::history_push("gpu_util", v as f64);
+        }
+        history::history_push("net_kbps", net_rx + net_tx);
+        if let Some(p) = bat_pct {
+            history::history_push("battery_percent", p as f64);
+        }
+        if let Some(pw) = nvidia.4 {
+            history::history_push("gpu_power_w", pw);
+        }
     }
 
     let mut stats = SystemStats {
@@ -228,6 +316,9 @@ pub fn collect_stats() -> SystemStats {
         cpu_temp,
         ram_used_gb: mem_used,
         ram_total_gb: mem_total,
+        ram_available_gb: mem_available,
+        ram_free_gb: mem_free,
+        ram_cached_gb: mem_cached,
         ram_percent,
         swap_used_gb: swap_used,
         swap_total_gb: swap_total,
@@ -238,14 +329,20 @@ pub fn collect_stats() -> SystemStats {
         gpu_util: nvidia.0,
         gpu_vram_used_mb: nvidia.1,
         gpu_vram_total_mb: nvidia.2,
-        gpu_temp: nvidia.3,
+        gpu_temp,
         gpu_freq_mhz: nvidia.6,
         gpu_power_w: nvidia.4,
         gpu_fan_pct: nvidia.5,
         igpu_util,
         fan1_rpm: fan1,
         fan2_rpm: fan2,
+        fan1_available: fan1_opt.is_some(),
+        fan2_available: fan2_opt.is_some(),
         ssd_temp,
+        ram_temp,
+        wifi_temp,
+        board_temp,
+        thermal,
         net_rx_kbps: net_rx,
         net_tx_kbps: net_tx,
         net_interface: iface,
@@ -257,9 +354,13 @@ pub fn collect_stats() -> SystemStats {
         battery_cycles: bat_cycles,
         battery_status: bat_status,
         battery_power_w: bat_power,
+        battery_energy_now_wh: bat_energy_now,
+        battery_energy_full_wh: bat_energy_full,
         view: StatsView::default(),
     };
-    stats.view = build_stats_view(&stats);
+    if include_view {
+        stats.view = build_stats_view(&stats);
+    }
     stats
 }
 
@@ -323,6 +424,24 @@ fn build_stats_view(stats: &SystemStats) -> StatsView {
         .gpu_util
         .map(|value| value.to_string())
         .unwrap_or_else(|| "--".into());
+    let gpu_freq = stats
+        .gpu_freq_mhz
+        .map(|value| format!("{value} MHz"))
+        .unwrap_or_else(|| "--".into());
+    let battery_time = battery_time_label(stats);
+    let net_status = if stats.net_interface.is_empty() || stats.net_ipv4.is_empty() {
+        "Tidak terhubung".to_string()
+    } else if stats.net_is_wifi {
+        format!("Wi-Fi · {}", stats.net_interface)
+    } else {
+        format!("Ethernet · {}", stats.net_interface)
+    };
+    let fan_rpm = match (stats.fan1_available, stats.fan2_available) {
+        (false, false) => "N/A".to_string(),
+        (true, true) => format!("{} / {} RPM", stats.fan1_rpm, stats.fan2_rpm),
+        (true, false) => format!("{} RPM", stats.fan1_rpm),
+        (false, true) => format!("{} RPM", stats.fan2_rpm),
+    };
     let gpu_vram = match (stats.gpu_vram_used_mb, stats.gpu_vram_total_mb) {
         (Some(used), Some(total)) => format!("{used} / {total} MB"),
         _ => "--".into(),
@@ -394,6 +513,7 @@ fn build_stats_view(stats: &SystemStats) -> StatsView {
         ),
         gpu_percent,
         gpu_temp,
+        gpu_freq,
         gpu_power: stats
             .gpu_power_w
             .map(|value| format!("{} W", fmt_num(value, 1)))
@@ -415,9 +535,11 @@ fn build_stats_view(stats: &SystemStats) -> StatsView {
             .battery_power_w
             .map(|value| format!("{} W", fmt_num(value, 1)))
             .unwrap_or_else(|| "--".into()),
-        fan_rpm: format!("{} / {} RPM", stats.fan1_rpm, stats.fan2_rpm),
+        fan_rpm,
         battery,
+        battery_time,
         ac_state,
+        net_status,
         net_interface: if stats.net_interface.is_empty() {
             "--".into()
         } else {
@@ -465,77 +587,200 @@ fn build_stats_view(stats: &SystemStats) -> StatsView {
     }
 }
 
-pub(crate) fn read_cpu_temp() -> Option<f32> {
-    if let Ok(entries) = fs::read_dir("/sys/class/thermal") {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let type_f = path.join("type");
-            let temp_f = path.join("temp");
-            if type_f.exists() && temp_f.exists() {
-                if let (Ok(t), Ok(temp)) =
-                    (fs::read_to_string(&type_f), fs::read_to_string(&temp_f))
-                {
-                    let t = t.trim().to_lowercase();
-                    if t.contains("x86_pkg") || t.contains("cpu_thermal") || t.contains("coretemp")
-                    {
-                        if let Ok(m) = temp.trim().parse::<f32>() {
-                            return Some(m / 1000.0);
-                        }
-                    }
-                }
+fn hwmon_index() -> Vec<(String, PathBuf)> {
+    const TTL_SECONDS: f64 = 10.0;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs_f64();
+    {
+        let cache = HWMON_CACHE.lock().unwrap();
+        if let Some((cached_at, entries)) = cache.as_ref() {
+            if now - *cached_at < TTL_SECONDS {
+                return entries.clone();
             }
         }
     }
+
+    let mut entries = Vec::new();
+    if let Ok(read) = fs::read_dir("/sys/class/hwmon") {
+        for entry in read.flatten() {
+            let path = entry.path();
+            let Ok(name) = fs::read_to_string(path.join("name")) else {
+                continue;
+            };
+            let name = name.trim().to_lowercase();
+            if !name.is_empty() {
+                entries.push((name, path));
+            }
+        }
+    }
+    *HWMON_CACHE.lock().unwrap() = Some((now, entries.clone()));
+    entries
+}
+
+fn hwmon_paths(name: &str) -> Vec<PathBuf> {
+    let needle = name.to_lowercase();
+    hwmon_index()
+        .into_iter()
+        .filter(|(entry_name, _)| entry_name.contains(&needle))
+        .map(|(_, path)| path)
+        .collect()
+}
+
+fn read_named_hwmon_temp(name: &str, label: Option<&str>) -> Option<f32> {
+    for path in hwmon_paths(name) {
+        let mut best: Option<f32> = None;
+        for i in 1..=8 {
+            let temp_f = path.join(format!("temp{i}_input"));
+            let Ok(raw) = fs::read_to_string(&temp_f) else {
+                continue;
+            };
+            let Ok(value) = raw.trim().parse::<f32>() else {
+                continue;
+            };
+            if value <= 0.0 {
+                continue;
+            }
+            if let Some(want) = label {
+                let actual =
+                    fs::read_to_string(path.join(format!("temp{i}_label"))).unwrap_or_default();
+                if !actual.trim().to_lowercase().contains(&want.to_lowercase()) {
+                    continue;
+                }
+            }
+            let celsius = value / 1000.0;
+            best = Some(best.map_or(celsius, |old| old.max(celsius)));
+        }
+        if best.is_some() {
+            return best;
+        }
+    }
     None
+}
+
+fn read_thermal_zone(name: &str) -> Option<f32> {
+    let entries = fs::read_dir("/sys/class/thermal").ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let kind = fs::read_to_string(path.join("type")).unwrap_or_default();
+        if kind.trim().eq_ignore_ascii_case(name) {
+            return fs::read_to_string(path.join("temp"))
+                .ok()
+                .and_then(|v| v.trim().parse::<f32>().ok())
+                .map(|v| v / 1000.0);
+        }
+    }
+    None
+}
+
+pub(crate) fn read_cpu_temp() -> Option<f32> {
+    read_named_hwmon_temp("coretemp", Some("Package id 0"))
+        .or_else(|| read_named_hwmon_temp("coretemp", None))
+        .or_else(|| read_thermal_zone("x86_pkg_temp"))
+        .or_else(|| read_thermal_zone("TCPU"))
+        .or_else(|| read_thermal_zone("cpu_thermal"))
 }
 
 fn read_ssd_temp() -> Option<f32> {
-    // Baca suhu SSD/NVMe dari hwmon jika tersedia.
-    if let Ok(entries) = fs::read_dir("/sys/class/hwmon") {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let name = fs::read_to_string(path.join("name")).unwrap_or_default();
-            let name = name.trim().to_lowercase();
-            if name.contains("nvme") || name.contains("nvidia") || name.contains("acpi") {
-                // Coba baca temp1_input..temp5_input
-                for i in 1..=5 {
-                    let temp_f = path.join(format!("temp{}_input", i));
-                    if let Ok(temp) = fs::read_to_string(&temp_f) {
-                        if let Ok(m) = temp.trim().parse::<f32>() {
-                            if m > 0.0 {
-                                return Some(m / 1000.0);
-                            }
-                        }
+    read_named_hwmon_temp("nvme", Some("Composite")).or_else(|| read_named_hwmon_temp("nvme", None))
+}
+
+fn read_board_temp() -> Option<f32> {
+    let entries = fs::read_dir("/sys/class/thermal").ok()?;
+    let mut values = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let kind = fs::read_to_string(path.join("type")).unwrap_or_default();
+        let kind = kind.trim();
+        if kind.starts_with("SEN") {
+            if let Ok(raw) = fs::read_to_string(path.join("temp")) {
+                if let Ok(v) = raw.trim().parse::<f32>() {
+                    if v > 0.0 {
+                        values.push(v / 1000.0);
                     }
                 }
             }
         }
     }
-    None
+    values.into_iter().reduce(f32::max)
+}
+
+fn read_thermal_sensors(
+    cpu: Option<f32>,
+    gpu: Option<u32>,
+    ssd: Option<f32>,
+    ram: Option<f32>,
+    wifi: Option<f32>,
+    board: Option<f32>,
+    gpu_source: &str,
+) -> Vec<ThermalSensor> {
+    let sensor = |id: &str, label: &str, temp_c: Option<f32>, source: &str| ThermalSensor {
+        id: id.into(),
+        label: label.into(),
+        temp_c,
+        source: source.into(),
+    };
+    vec![
+        sensor("cpu", "CPU Package", cpu, "hwmon/coretemp"),
+        sensor("gpu", "GPU", gpu.map(|v| v as f32), gpu_source),
+        sensor("ssd", "NVMe", ssd, "hwmon/nvme"),
+        sensor("ram", "RAM", ram, "hwmon/spd5118"),
+        sensor("wifi", "WiFi", wifi, "hwmon/iwlwifi"),
+        sensor("board", "EC / Board", board, "thermal/EC"),
+    ]
 }
 
 pub(crate) fn read_gpu_temp_sysfs() -> Option<f32> {
-    // Baca suhu GPU dari hwmon NVIDIA jika tersedia.
-    if let Ok(entries) = fs::read_dir("/sys/class/hwmon") {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let name = fs::read_to_string(path.join("name")).unwrap_or_default();
-            let name = name.trim().to_lowercase();
-            if name.contains("nvidia") {
-                for i in 1..=5 {
-                    let temp_f = path.join(format!("temp{}_input", i));
-                    if let Ok(temp) = fs::read_to_string(&temp_f) {
-                        if let Ok(m) = temp.trim().parse::<f32>() {
-                            if m > 0.0 {
-                                return Some(m / 1000.0);
-                            }
-                        }
-                    }
-                }
-            }
+    read_named_hwmon_temp("nvidia", None)
+}
+
+fn read_meminfo_kb(keys: &[&str]) -> f64 {
+    let Ok(text) = fs::read_to_string("/proc/meminfo") else {
+        return 0.0;
+    };
+    let mut total = 0.0;
+    for line in text.lines() {
+        let mut parts = line.split_whitespace();
+        let Some(key) = parts.next() else { continue };
+        let key = key.trim_end_matches(':');
+        if keys.contains(&key) {
+            total += parts
+                .next()
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(0.0);
         }
     }
-    None
+    total
+}
+
+fn battery_time_label(stats: &SystemStats) -> String {
+    let Some(power) = stats.battery_power_w.filter(|v| *v > 0.5) else {
+        return "--".into();
+    };
+    let now = stats
+        .battery_energy_now_wh
+        .or_else(|| Some(stats.battery_energy_full_wh? * stats.battery_percent? as f64 / 100.0));
+    let target = match stats.power_plugged {
+        Some(true) => match (stats.battery_energy_full_wh, now) {
+            (Some(full), Some(now)) => Some((full - now).max(0.0)),
+            _ => stats.battery_energy_full_wh,
+        },
+        _ => now,
+    };
+    let Some(wh) = target else {
+        return "--".into();
+    };
+    let hours = wh / power;
+    if !hours.is_finite() || hours <= 0.0 {
+        return "--".into();
+    }
+    let minutes = (hours * 60.0).round() as u64;
+    if minutes >= 60 {
+        format!("{} jam {} menit", minutes / 60, minutes % 60)
+    } else {
+        format!("{minutes} menit")
+    }
 }
 
 fn read_df() -> HashMap<String, (f64, f64, f64)> {
@@ -732,7 +977,7 @@ fn read_diskstats_bytes() -> (u64, u64, u64) {
     (read_sectors * 512, write_sectors * 512, io_ticks)
 }
 
-pub(crate) fn read_nvidia() -> (
+type NvidiaReadings = (
     Option<u32>,
     Option<u64>,
     Option<u64>,
@@ -740,7 +985,46 @@ pub(crate) fn read_nvidia() -> (
     Option<f64>,
     Option<u32>,
     Option<u32>,
-) {
+);
+
+const NVIDIA_NONE: NvidiaReadings = (None, None, None, None, None, None, None);
+
+pub(crate) fn nvidia_driver_present() -> bool {
+    Path::new("/dev/nvidia0").exists()
+        || Path::new("/dev/nvidiactl").exists()
+        || Path::new("/proc/driver/nvidia/version").exists()
+}
+
+pub(crate) fn read_nvidia() -> NvidiaReadings {
+    let readings = read_nvidia_uncached();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs_f64();
+    *NVIDIA_CACHE.lock().unwrap() = Some((now, readings));
+    readings
+}
+
+/// Reuse reading terakhir dari monitor loop (mis. untuk tab RAM) supaya
+/// `nvidia-smi` tidak dijalankan dua kali dalam beberapa detik.
+pub(crate) fn read_nvidia_cached(max_age_seconds: f64) -> NvidiaReadings {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs_f64();
+    if let Some((cached_at, readings)) = *NVIDIA_CACHE.lock().unwrap() {
+        if now - cached_at <= max_age_seconds {
+            return readings;
+        }
+    }
+    read_nvidia()
+}
+
+fn read_nvidia_uncached() -> NvidiaReadings {
+    // Driver tidak loaded / GPU tidak ada: jangan spawn nvidia-smi tiap detik.
+    if !nvidia_driver_present() {
+        return NVIDIA_NONE;
+    }
     let out = match Command::new("nvidia-smi")
         .args([
             "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,fan.speed,clocks.gr",
@@ -748,15 +1032,15 @@ pub(crate) fn read_nvidia() -> (
         ])
         .output()
     {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).trim().to_string(),
-        Err(_) => return (None, None, None, None, None, None, None),
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
+        _ => return NVIDIA_NONE,
     };
     if out.is_empty() {
-        return (None, None, None, None, None, None, None);
+        return NVIDIA_NONE;
     }
     let parts: Vec<&str> = out.split(',').map(|s| s.trim()).collect();
     if parts.len() < 7 {
-        return (None, None, None, None, None, None, None);
+        return NVIDIA_NONE;
     }
     let util = parts[0].parse::<u32>().ok();
     let mem_used = parts[1].parse::<f64>().ok();
@@ -824,28 +1108,44 @@ fn read_igpu_util() -> Option<f32> {
     None
 }
 
-pub(crate) fn read_fan_rpms() -> (u32, u32) {
-    let hwmon = find_hwmon();
-    let read = |name: &str| {
-        hwmon
-            .as_ref()
-            .and_then(|p| fs::read_to_string(p.join(name)).ok())
-            .and_then(|v| v.trim().parse::<u32>().ok())
-            .unwrap_or(0)
-    };
-    (read("fan1_input"), read("fan2_input"))
+pub(crate) fn read_fan_rpms() -> (Option<u32>, Option<u32>) {
+    let mut fan1 = None;
+    let mut fan2 = None;
+    for (name, path) in hwmon_index() {
+        if !matches!(
+            name.as_str(),
+            "legion_laptop" | "lenovo_wmi_fan" | "lenovo_wmi_other" | "ideapad" | "yogafan"
+        ) {
+            continue;
+        }
+        for (slot, file) in [(&mut fan1, "fan1_input"), (&mut fan2, "fan2_input")] {
+            if slot.is_some() {
+                continue;
+            }
+            if let Ok(raw) = fs::read_to_string(path.join(file)) {
+                if let Ok(value) = raw.trim().parse::<u32>() {
+                    *slot = Some(value);
+                }
+            }
+        }
+    }
+    (fan1, fan2)
 }
 
 pub(crate) fn find_hwmon() -> Option<PathBuf> {
-    let entries = fs::read_dir("/sys/class/hwmon").ok()?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if let Ok(name) = fs::read_to_string(path.join("name")) {
-            let name = name.trim();
-            if matches!(
-                name,
-                "legion_laptop" | "lenovo_wmi_fan" | "lenovo_wmi_other" | "ideapad"
-            ) {
+    for name in [
+        "legion_laptop",
+        "lenovo_wmi_fan",
+        "lenovo_wmi_other",
+        "ideapad",
+        "yogafan",
+    ] {
+        let paths = hwmon_paths(name);
+        if let Some(path) = paths.into_iter().find(|p| p.join("pwm1").exists()) {
+            return Some(path);
+        }
+        if name == "yogafan" {
+            if let Some(path) = hwmon_paths(name).into_iter().next() {
                 return Some(path);
             }
         }
@@ -888,9 +1188,16 @@ fn read_power_supply() -> (Option<bool>, Option<f32>) {
     (plugged, pct)
 }
 
-fn read_battery_details() -> (Option<f32>, Option<u32>, String, Option<f64>) {
+fn read_battery_details() -> (
+    Option<f32>,
+    Option<u32>,
+    String,
+    Option<f64>,
+    Option<f64>,
+    Option<f64>,
+) {
     let Ok(entries) = fs::read_dir("/sys/class/power_supply") else {
-        return (None, None, String::new(), None);
+        return (None, None, String::new(), None, None, None);
     };
     for entry in entries.flatten() {
         let path = entry.path();
@@ -924,9 +1231,11 @@ fn read_battery_details() -> (Option<f32>, Option<u32>, String, Option<f64>) {
             let voltage = read_u64("voltage_now")?;
             Some(current as f64 * voltage as f64 / 1e12)
         });
-        return (health, cycles, status, power);
+        let energy_now = read_u64("energy_now").map(|v| v as f64 / 1e6);
+        let energy_full = energy_full.map(|v| v as f64 / 1e6);
+        return (health, cycles, status, power, energy_now, energy_full);
     }
-    (None, None, String::new(), None)
+    (None, None, String::new(), None, None, None)
 }
 
 fn default_iface() -> Option<String> {
@@ -1007,6 +1316,24 @@ fn read_ipv4(iface: &str) -> String {
     if iface.is_empty() {
         return String::new();
     }
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs_f64();
+    {
+        let cache = IP_CACHE.lock().unwrap();
+        if let Some((cached_iface, addr, cached_at)) = cache.as_ref() {
+            if cached_iface == iface && now - *cached_at < 5.0 {
+                return addr.clone();
+            }
+        }
+    }
+    let addr = read_ipv4_uncached(iface);
+    *IP_CACHE.lock().unwrap() = Some((iface.to_string(), addr.clone(), now));
+    addr
+}
+
+fn read_ipv4_uncached(iface: &str) -> String {
     let out = match Command::new("ip")
         .args(["-j", "-br", "-f", "inet", "addr", "show", iface])
         .output()

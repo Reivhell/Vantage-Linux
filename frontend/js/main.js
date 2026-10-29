@@ -1,5 +1,5 @@
-// Master entrypoint for Lenovo Vantage Linux
-import { $, invoke, listen, toast } from "./core.js";
+// Master entrypoint for Vantage Linux
+import { $, applyI18n, invoke, listen, toast } from "./core.js";
 import { initTabs, onTabChange, switchTab } from "./tabs.js";
 import { loadDashboard } from "./dashboard.js";
 import { initPerformance, loadPerformance } from "./performance.js";
@@ -10,6 +10,8 @@ import { initFan, loadFan } from "./fan.js";
 import { initDevice, loadDevice } from "./device.js";
 import { initDiagnostics, loadDiagnostics } from "./diagnostics.js";
 import { initSettings, loadSettings } from "./settings.js";
+import { initResource, loadResource } from "./resource.js";
+import { initMemory, loadMemory } from "./memory.js";
 import { handleIncomingStats } from "./stats.js";
 
 async function initWindowControls() {
@@ -41,6 +43,8 @@ async function boot() {
   initDevice();
   initDiagnostics();
   initSettings();
+  initResource();
+  initMemory();
   initWindowControls();
 
   // 2. Register tab loaders
@@ -53,6 +57,8 @@ async function boot() {
   onTabChange("device", loadDevice);
   onTabChange("diagnostics", loadDiagnostics);
   onTabChange("settings", loadSettings);
+  onTabChange("resource", loadResource);
+  onTabChange("memory", loadMemory);
 
   // 3. Load initial data
   try {
@@ -61,9 +67,11 @@ async function boot() {
     switchTab(targetTab);
 
     // 4. Listen to live hardware stats from Rust backend
-    await listen("loq:stats", (event) => {
+    await listen("vantage:stats", (event) => {
       handleIncomingStats(event.payload);
     });
+
+    applyI18n();
 
     const snapshot = await invoke("cmd_get_stats_snapshot");
     if (snapshot) {

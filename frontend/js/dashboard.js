@@ -1,6 +1,33 @@
 // Screen 1: Home Dashboard loader and updater
 import { $, invoke } from "./core.js";
 
+const spark = { cpu: [], gpu: [], ram: [] };
+
+function pushSpark(key, value) {
+  const v = Number(value);
+  if (!Number.isFinite(v)) return;
+  const arr = spark[key];
+  arr.push(Math.max(0, Math.min(100, v)));
+  if (arr.length > 60) arr.shift();
+  const line = $(`home-${key}-spark`);
+  if (!line || arr.length < 2) return;
+  const last = arr.length - 1;
+  line.setAttribute(
+    "points",
+    arr
+      .map((n, i) => `${((i / Math.max(1, last)) * 100).toFixed(1)},${(28 - (n / 100) * 26).toFixed(1)}`)
+      .join(" ")
+  );
+}
+
+function tempText(value) {
+  return value === null || value === undefined ? "--" : `${Math.round(value)}°C`;
+}
+
+function rpmText(rpm, available) {
+  return available && rpm !== null && rpm !== undefined ? `${rpm} RPM` : "N/A";
+}
+
 export async function loadDashboard() {
   try {
     const [dev, presets, stats] = await Promise.all([
@@ -9,26 +36,20 @@ export async function loadDashboard() {
       invoke("cmd_get_stats_snapshot"),
     ]);
 
-    // Device Model & Status in sidebar and header
     if (dev) {
-      const model = [dev.vendor, dev.product].filter(Boolean).join(" ") || "Lenovo LOQ 15IAX9E";
-      const modelEl = $("sidebar-device-model");
-      if (modelEl) modelEl.textContent = model;
+      const model = [dev.vendor, dev.product].filter(Boolean).join(" ") || "--";
+      if ($("sidebar-device-model")) $("sidebar-device-model").textContent = model;
     }
 
-    // Active Profile in Featured Banner
-    if (presets && Array.isArray(presets)) {
+    if (Array.isArray(presets)) {
       const active = presets.find((p) => p.active) || presets.find((p) => p.key === "balanced") || presets[0];
       if (active) {
-        if ($("dash-mode-title")) $("dash-mode-title").textContent = active.label || "Balanced";
-        if ($("dash-mode-desc")) $("dash-mode-desc").textContent = active.description || "Seimbang antara performa dan daya.";
+        if ($("dash-mode-title")) $("dash-mode-title").textContent = active.label || "--";
+        if ($("dash-mode-desc")) $("dash-mode-desc").textContent = active.description || "--";
       }
     }
 
-    // Live Snapshot telemetry
-    if (stats) {
-      updateDashboardStats(stats);
-    }
+    if (stats) updateDashboardStats(stats);
   } catch (err) {
     console.error("loadDashboard error:", err);
   }
@@ -36,50 +57,41 @@ export async function loadDashboard() {
 
 export function updateDashboardStats(stats) {
   if (!stats) return;
-
   const view = stats.view || {};
 
-  // CPU
-  const cpuPct = view.cpu_percent || `${Math.round(stats.cpu_percent || 12)}%`;
-  const cpuFreq = view.cpu_freq || "2.8 GHz";
-  if ($("home-cpu-pct")) $("home-cpu-pct").textContent = cpuPct;
-  if ($("home-cpu-freq")) $("home-cpu-freq").textContent = cpuFreq;
+  const cpu = Number(stats.cpu_percent) || 0;
+  const gpuValue = stats.gpu_util === null || stats.gpu_util === undefined ? null : Number(stats.gpu_util);
+  const gpu = gpuValue ?? 0;
+  const ram = Number(stats.ram_percent) || 0;
 
-  // GPU
-  const gpuPct = view.gpu_percent || `${Math.round(stats.gpu_percent || 8)}%`;
-  const gpuFreq = stats.gpu_clock ? `${stats.gpu_clock} MHz` : "210 MHz";
-  if ($("home-gpu-pct")) $("home-gpu-pct").textContent = gpuPct;
-  if ($("home-gpu-clock")) $("home-gpu-clock").textContent = gpuFreq;
+  if ($("home-cpu-pct")) $("home-cpu-pct").textContent = `${Math.round(cpu)}%`;
+  if ($("home-cpu-freq")) $("home-cpu-freq").textContent = view.cpu_freq || "--";
+  pushSpark("cpu", cpu);
 
-  // RAM
-  const ramPct = view.ram_percent || `${Math.round(stats.ram_percent || 34)}%`;
-  let ramUsed = "5.4 / 16 GB";
-  if (view.ram_used) {
-    ramUsed = view.ram_used.includes("/") ? view.ram_used : `${view.ram_used} / ${view.ram_total || "16 GB"}`;
+  if ($("home-gpu-pct")) $("home-gpu-pct").textContent = gpuValue === null ? "--" : `${Math.round(gpu)}%`;
+  if ($("home-gpu-clock")) $("home-gpu-clock").textContent = view.gpu_freq || "--";
+  if (gpuValue !== null && Number.isFinite(gpuValue)) pushSpark("gpu", gpuValue);
+
+  if ($("home-ram-pct")) $("home-ram-pct").textContent = `${Math.round(ram)}%`;
+  if ($("home-ram-used")) {
+    $("home-ram-used").textContent = view.ram_used
+      ? `${view.ram_used} / ${view.ram_total || "--"}`
+      : "--";
   }
-  if ($("home-ram-pct")) $("home-ram-pct").textContent = ramPct;
-  if ($("home-ram-used")) $("home-ram-used").textContent = ramUsed;
+  pushSpark("ram", ram);
 
-  // Battery
-  const batPctNum = stats.battery_percent ?? 78;
-  const batPct = `${batPctNum}%`;
-  const batTime = "2 jam 45 menit";
-  if ($("home-bat-pct")) $("home-bat-pct").textContent = batPct;
-  if ($("home-bat-time")) $("home-bat-time").textContent = batTime;
-  if ($("home-bat-fill")) $("home-bat-fill").style.width = `${Math.min(100, Math.max(5, batPctNum))}%`;
+  const batPct = stats.battery_percent;
+  if ($("home-bat-pct")) $("home-bat-pct").textContent = batPct === null || batPct === undefined ? "--" : `${Math.round(batPct)}%`;
+  if ($("home-bat-time")) $("home-bat-time").textContent = view.battery_time || "--";
+  if ($("home-bat-fill") && batPct !== null && batPct !== undefined) {
+    $("home-bat-fill").style.width = `${Math.min(100, Math.max(0, batPct))}%`;
+  }
 
-  // Lower cards
-  // Suhu
-  const tempCpu = stats.temp_cpu ? `${stats.temp_cpu}°C` : (view.cpu_temp || "48°C");
-  const tempGpu = stats.temp_gpu ? `${stats.temp_gpu}°C` : (view.gpu_temp || "42°C");
-  const tempSsd = stats.temp_ssd ? `${stats.temp_ssd}°C` : "36°C";
-  if ($("home-temp-cpu")) $("home-temp-cpu").textContent = tempCpu;
-  if ($("home-temp-gpu")) $("home-temp-gpu").textContent = tempGpu;
-  if ($("home-temp-ssd")) $("home-temp-ssd").textContent = tempSsd;
+  if ($("home-temp-cpu")) $("home-temp-cpu").textContent = tempText(stats.cpu_temp);
+  if ($("home-temp-gpu")) $("home-temp-gpu").textContent = tempText(stats.gpu_temp);
+  if ($("home-temp-ssd")) $("home-temp-ssd").textContent = tempText(stats.ssd_temp);
 
-  // Kipas
-  const fanCpu = stats.fan1_rpm ? `${stats.fan1_rpm} RPM` : "1200 RPM";
-  const fanGpu = stats.fan2_rpm ? `${stats.fan2_rpm} RPM` : "1100 RPM";
-  if ($("home-fan-cpu")) $("home-fan-cpu").textContent = fanCpu;
-  if ($("home-fan-gpu")) $("home-fan-gpu").textContent = fanGpu;
+  if ($("home-fan-cpu")) $("home-fan-cpu").textContent = rpmText(stats.fan1_rpm, stats.fan1_available);
+  if ($("home-fan-gpu")) $("home-fan-gpu").textContent = rpmText(stats.fan2_rpm, stats.fan2_available);
+  if ($("home-net-status")) $("home-net-status").textContent = view.net_status || "--";
 }

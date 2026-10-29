@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Vantage</title>
+  <title>Vantage Linux</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -24,31 +24,39 @@
       </div>
 
       <nav class="nav-menu" id="nav-tabs" role="tablist">
-        <button class="nav-item active" data-tab="home" role="tab" aria-selected="true" id="nav-home">
+        <button class="nav-item active" data-tab="home" role="tab" aria-selected="true" id="nav-home" data-i18n="nav.home">
           <svg viewBox="0 0 24 24" fill="none"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           <span>Home</span>
         </button>
-        <button class="nav-item" data-tab="performance" role="tab" aria-selected="false" id="nav-performance">
+        <button class="nav-item" data-tab="performance" role="tab" aria-selected="false" id="nav-performance" data-i18n="nav.performance">
           <svg viewBox="0 0 24 24" fill="none"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>
           <span>Performance</span>
         </button>
-        <button class="nav-item" data-tab="battery" role="tab" aria-selected="false" id="nav-battery">
+        <button class="nav-item" data-tab="battery" role="tab" aria-selected="false" id="nav-battery" data-i18n="nav.battery">
           <svg viewBox="0 0 24 24" fill="none"><rect width="16" height="10" x="2" y="7" rx="2" ry="2"/><line x1="22" x2="22" y1="11" y2="13"/></svg>
           <span>Battery</span>
         </button>
-        <button class="nav-item" data-tab="thermal" role="tab" aria-selected="false" id="nav-thermal">
+        <button class="nav-item" data-tab="thermal" role="tab" aria-selected="false" id="nav-thermal" data-i18n="nav.thermal">
           <svg viewBox="0 0 24 24" fill="none"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg>
           <span>Thermal</span>
         </button>
-        <button class="nav-item" data-tab="gpu" role="tab" aria-selected="false" id="nav-gpu">
+        <button class="nav-item" data-tab="gpu" role="tab" aria-selected="false" id="nav-gpu" data-i18n="nav.gpu">
           <svg viewBox="0 0 24 24" fill="none"><rect width="14" height="14" x="5" y="5" rx="2"/><line x1="9" x2="9" y1="2" y2="5"/><line x1="15" x2="15" y1="2" y2="5"/><line x1="9" x2="9" y1="19" y2="22"/><line x1="15" x2="15" y1="19" y2="22"/><line x1="2" x2="5" y1="9" y2="9"/><line x1="2" x2="5" y1="15" y2="15"/><line x1="19" x2="22" y1="9" y2="9"/><line x1="19" x2="22" y1="15" y2="15"/></svg>
           <span>GPU</span>
         </button>
-        <button class="nav-item" data-tab="device" role="tab" aria-selected="false" id="nav-device">
+        <button class="nav-item" data-tab="resource" role="tab" aria-selected="false" id="nav-resource" data-i18n="nav.resource">
+          <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" x2="21" y1="9" y2="9"/><line x1="9" x2="21" y1="15" y2="15"/></svg>
+          <span>Sumber Daya</span>
+        </button>
+        <button class="nav-item" data-tab="memory" role="tab" aria-selected="false" id="nav-memory" data-i18n="nav.memory">
+          <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="7" width="18" height="10" rx="2"/><line x1="7" x2="7" y1="7" y2="4"/><line x1="12" x2="12" y1="7" y2="4"/><line x1="17" x2="17" y1="7" y2="4"/><line x1="7" x2="7" y1="17" y2="20"/><line x1="12" x2="12" y1="17" y2="20"/><line x1="17" x2="17" y1="17" y2="20"/></svg>
+          <span>RAM</span>
+        </button>
+        <button class="nav-item" data-tab="device" role="tab" aria-selected="false" id="nav-device" data-i18n="nav.device">
           <svg viewBox="0 0 24 24" fill="none"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/></svg>
           <span>Device</span>
         </button>
-        <button class="nav-item" data-tab="diagnostics" role="tab" aria-selected="false" id="nav-diagnostics">
+        <button class="nav-item" data-tab="diagnostics" role="tab" aria-selected="false" id="nav-diagnostics" data-i18n="nav.diagnostics">
           <svg viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
           <span>Diagnostics</span>
         </button>
@@ -67,7 +75,8 @@
           <line x1="2" x2="22" y1="20" y2="20"/>
         </svg>
         <div class="device-badge-info">
-          <span class="device-model-name" id="sidebar-device-model">Lenovo LOQ 15IAX9E</span>
+          <! Model Information>
+          <span class="device-model-name" id="sidebar-device-model"></span>
           <span class="device-conn-status">
             <span class="status-dot"></span>
             <span>Connected</span>
@@ -109,8 +118,8 @@
       <section class="panel-group" id="tab-home">
         <div class="screen-header">
           <div class="screen-header-left">
-            <h1>Selamat datang!</h1>
-            <p>Atur performa laptop Anda sesuai kebutuhan.</p>
+            <h1 data-i18n="screen.home.title">Selamat datang!</h1>
+            <p data-i18n="screen.home.sub">Atur performa laptop Anda sesuai kebutuhan.</p>
           </div>
         </div>
 
@@ -120,17 +129,18 @@
             <div class="mode-badge-circle" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             </div>
+            <! Preset Mode Saat Ini Real time >
             <div class="mode-info-block">
               <span class="mode-info-tag">Mode Saat Ini</span>
-              <h2 class="mode-info-title" id="dash-mode-title">Balanced</h2>
-              <p class="mode-info-desc" id="dash-mode-desc">Seimbang antara performa dan daya.</p>
+              <h2 class="mode-info-title" id="dash-mode-title">...</h2>
+              <p class="mode-info-desc" id="dash-mode-desc">...</p>
               <div>
                 <button class="btn-primary" id="btn-change-mode">Ubah Mode</button>
               </div>
             </div>
           </div>
           <div class="featured-banner-right">
-            <img src="img/loq_laptop_banner.jpg" alt="Lenovo LOQ Gaming Laptop" class="featured-laptop-img" />
+            <img src="img/lenovo.avif" alt="Lenovo Laptop" class="featured-laptop-img" />
           </div>
         </article>
 
@@ -142,9 +152,9 @@
               <span class="metric-label">CPU</span>
             </div>
             <div class="metric-value-row">
-              <span class="metric-value-big mono" id="home-cpu-pct">12%</span>
+              <span class="metric-value-big mono" id="home-cpu-pct">--</span>
             </div>
-            <span class="metric-sub mono" id="home-cpu-freq">2.8 GHz</span>
+            <span class="metric-sub mono" id="home-cpu-freq">--</span>
             <svg class="sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none">
               <defs>
                 <linearGradient id="cyanGradient" x1="0" y1="0" x2="0" y2="1">
@@ -152,7 +162,7 @@
                   <stop offset="100%" stop-color="#19C9E8" stop-opacity="0"/>
                 </linearGradient>
               </defs>
-              <polyline class="sparkline-path" id="home-cpu-spark" points="0,22 15,20 30,24 45,15 60,18 75,12 90,16 100,14" />
+              <polyline class="sparkline-path" id="home-cpu-spark" />
             </svg>
           </article>
 
@@ -162,11 +172,11 @@
               <span class="metric-label">GPU</span>
             </div>
             <div class="metric-value-row">
-              <span class="metric-value-big mono" id="home-gpu-pct">8%</span>
+              <span class="metric-value-big mono" id="home-gpu-pct">--</span>
             </div>
-            <span class="metric-sub mono" id="home-gpu-clock">210 MHz</span>
+            <span class="metric-sub mono" id="home-gpu-clock">--</span>
             <svg class="sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none">
-              <polyline class="sparkline-path" id="home-gpu-spark" points="0,25 20,22 40,24 60,19 80,21 100,18" />
+              <polyline class="sparkline-path" id="home-gpu-spark" />
             </svg>
           </article>
 
@@ -176,11 +186,11 @@
               <span class="metric-label">RAM</span>
             </div>
             <div class="metric-value-row">
-              <span class="metric-value-big mono" id="home-ram-pct">34%</span>
+              <span class="metric-value-big mono" id="home-ram-pct">--</span>
             </div>
-            <span class="metric-sub mono" id="home-ram-used">5.4 / 16 GB</span>
+            <span class="metric-sub mono" id="home-ram-used">--</span>
             <svg class="sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none">
-              <polyline class="sparkline-path" id="home-ram-spark" points="0,20 20,19 40,21 60,20 80,18 100,17" />
+              <polyline class="sparkline-path" id="home-ram-spark" />
             </svg>
           </article>
 
@@ -190,9 +200,9 @@
               <span class="metric-label">Baterai</span>
             </div>
             <div class="metric-value-row">
-              <span class="metric-value-big mono" id="home-bat-pct">78%</span>
+              <span class="metric-value-big mono" id="home-bat-pct">--</span>
             </div>
-            <span class="metric-sub" id="home-bat-time">2 jam 45 menit</span>
+            <span class="metric-sub" id="home-bat-time">--</span>
             <div class="battery-capsule-wrap">
               <div class="battery-capsule">
                 <div class="battery-capsule-fill" id="home-bat-fill"></div>
@@ -209,15 +219,15 @@
             <div class="stat-item-row">
               <div class="stat-item-col">
                 <span class="stat-col-lbl">CPU</span>
-                <span class="stat-col-val mono" id="home-temp-cpu">48°C</span>
+                <span class="stat-col-val mono" id="home-temp-cpu">--</span>
               </div>
               <div class="stat-item-col">
                 <span class="stat-col-lbl">GPU</span>
-                <span class="stat-col-val mono" id="home-temp-gpu">42°C</span>
+                <span class="stat-col-val mono" id="home-temp-gpu">--</span>
               </div>
               <div class="stat-item-col">
                 <span class="stat-col-lbl">SSD</span>
-                <span class="stat-col-val mono" id="home-temp-ssd">36°C</span>
+                <span class="stat-col-val mono" id="home-temp-ssd">--</span>
               </div>
             </div>
           </article>
@@ -227,12 +237,12 @@
             <h3 class="card-title">Kipas</h3>
             <div class="stat-item-row">
               <div class="stat-item-col">
-                <span class="stat-col-lbl">CPU</span>
-                <span class="stat-col-val mono" id="home-fan-cpu">1200 RPM</span>
+                <span class="stat-col-lbl">Kipas 1</span>
+                <span class="stat-col-val mono" id="home-fan-cpu">N/A</span>
               </div>
               <div class="stat-item-col">
-                <span class="stat-col-lbl">GPU</span>
-                <span class="stat-col-val mono" id="home-fan-gpu">1100 RPM</span>
+                <span class="stat-col-lbl">Kipas 2</span>
+                <span class="stat-col-val mono" id="home-fan-gpu">N/A</span>
               </div>
             </div>
           </article>
@@ -243,7 +253,7 @@
             <div class="network-stat-wrap">
               <div>
                 <div class="stat-col-lbl">Wi-Fi</div>
-                <div class="network-status-text" id="home-net-status">Terhubung</div>
+                <div class="network-status-text" id="home-net-status">Tidak terhubung</div>
               </div>
               <svg class="network-wifi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
@@ -262,8 +272,8 @@
       <section class="panel-group active" id="tab-performance">
         <div class="screen-header">
           <div class="screen-header-left">
-            <h1>Mode Performa</h1>
-            <p>Pilih mode yang sesuai dengan aktivitas Anda.</p>
+            <h1 data-i18n="screen.performance.title">Mode Performa</h1>
+            <p data-i18n="screen.performance.sub">Pilih mode yang sesuai dengan aktivitas Anda.</p>
           </div>
         </div>
 
@@ -359,8 +369,8 @@
       <section class="panel-group" id="tab-battery">
         <div class="screen-header">
           <div class="screen-header-left">
-            <h1>Battery</h1>
-            <p>Pantau kesehatan baterai dan pengisiannya.</p>
+            <h1 data-i18n="screen.battery.title">Battery</h1>
+            <p data-i18n="screen.battery.sub">Pantau kesehatan baterai dan pengisiannya.</p>
           </div>
         </div>
 
@@ -369,10 +379,10 @@
           <div class="battery-circle-gauge-wrap">
             <svg class="gauge-svg" viewBox="0 0 100 100">
               <circle class="gauge-bg-ring" cx="50" cy="50" r="42" />
-              <circle class="gauge-progress-ring" id="bat-circle-progress" cx="50" cy="50" r="42" stroke-dasharray="264" stroke-dashoffset="58" />
+              <circle class="gauge-progress-ring" id="bat-circle-progress" cx="50" cy="50" r="42" stroke-dasharray="264" stroke-dashoffset="264" />
             </svg>
             <div class="gauge-center-content">
-              <span class="gauge-center-pct mono" id="bat-gauge-pct">78%</span>
+              <span class="gauge-center-pct mono" id="bat-gauge-pct">--</span>
               <span class="gauge-center-sub">Sisa daya</span>
             </div>
           </div>
@@ -383,7 +393,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 Estimasi waktu
               </span>
-              <span class="battery-info-val" id="bat-stat-time">2 jam 45 menit</span>
+              <span class="battery-info-val" id="bat-stat-time">--</span>
             </div>
 
             <div class="battery-info-row">
@@ -391,7 +401,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
                 Kesehatan baterai
               </span>
-              <span class="battery-info-val" id="bat-stat-health">Good (92%)</span>
+              <span class="battery-info-val" id="bat-stat-health">--</span>
             </div>
 
             <div class="battery-info-row">
@@ -399,7 +409,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
                 Siklus pengisian
               </span>
-              <span class="battery-info-val mono" id="bat-stat-cycles">78</span>
+              <span class="battery-info-val mono" id="bat-stat-cycles">--</span>
             </div>
 
             <div class="battery-info-row">
@@ -407,7 +417,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="16" height="10" x="2" y="7" rx="2" ry="2"/><line x1="22" x2="22" y1="11" y2="13"/></svg>
                 Kapasitas penuh
               </span>
-              <span class="battery-info-val" id="bat-stat-cap">56.4 Wh (desain 60 Wh)</span>
+              <span class="battery-info-val" id="bat-stat-cap">--</span>
             </div>
           </div>
         </article>
@@ -449,10 +459,10 @@
                 </defs>
 
                 <!-- Polygon Area Fill -->
-                <polygon id="bat-chart-area" fill="url(#batAreaGrad)" points="45,123 45,95 85,80 135,50 185,55 235,40 285,42 330,38 330,123" />
+                <polygon id="bat-chart-area" fill="url(#batAreaGrad)" />
 
                 <!-- Stroke Line -->
-                <polyline id="bat-chart-line" fill="none" stroke="#19C9E8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="45,95 85,80 135,50 185,55 235,40 285,42 330,38" />
+                <polyline id="bat-chart-line" fill="none" stroke="#19C9E8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
 
                 <!-- X Axis Labels -->
                 <text class="chart-axis-label" x="45" y="136" text-anchor="middle">00:00</text>
@@ -498,8 +508,8 @@
       <section class="panel-group" id="tab-thermal">
         <div class="screen-header">
           <div class="screen-header-left">
-            <h1 id="thermal-page-heading">System Temperature</h1>
-            <p id="thermal-page-subheading">Pantau suhu komponen laptop Anda secara real-time.</p>
+            <h1 id="thermal-page-heading" data-i18n="screen.thermal.title">System Temperature</h1>
+            <p id="thermal-page-subheading" data-i18n="screen.thermal.sub">Pantau suhu komponen laptop Anda secara real-time.</p>
           </div>
           <div class="screen-header-controls">
             <div class="segmented-pills" id="thermal-view-switch">
@@ -520,12 +530,12 @@
             <div class="temp-gauge-ring-box">
               <svg class="gauge-svg" viewBox="0 0 100 100">
                 <circle class="gauge-bg-ring" cx="50" cy="50" r="40" />
-                <circle class="gauge-progress-ring" id="ring-cpu-temp" cx="50" cy="50" r="40" stroke="#19C9E8" stroke-dasharray="251" stroke-dashoffset="130" />
+                <circle class="gauge-progress-ring" id="ring-cpu-temp" cx="50" cy="50" r="40" stroke="#19C9E8" stroke-dasharray="251" stroke-dashoffset="251" />
               </svg>
-              <span class="temp-val-center mono" id="gauge-temp-cpu">48°C</span>
+              <span class="temp-val-center mono" id="gauge-temp-cpu">--</span>
             </div>
             <span class="temp-label-bottom">CPU</span>
-            <span class="status-badge-pill" id="badge-temp-cpu">Normal</span>
+            <span class="status-badge-pill" id="badge-temp-cpu">N/A</span>
           </article>
 
           <!-- GPU -->
@@ -533,12 +543,12 @@
             <div class="temp-gauge-ring-box">
               <svg class="gauge-svg" viewBox="0 0 100 100">
                 <circle class="gauge-bg-ring" cx="50" cy="50" r="40" />
-                <circle class="gauge-progress-ring" id="ring-gpu-temp" cx="50" cy="50" r="40" stroke="#21D6B2" stroke-dasharray="251" stroke-dashoffset="145" />
+                <circle class="gauge-progress-ring" id="ring-gpu-temp" cx="50" cy="50" r="40" stroke="#21D6B2" stroke-dasharray="251" stroke-dashoffset="251" />
               </svg>
-              <span class="temp-val-center mono" id="gauge-temp-gpu">42°C</span>
+              <span class="temp-val-center mono" id="gauge-temp-gpu">--</span>
             </div>
             <span class="temp-label-bottom">GPU</span>
-            <span class="status-badge-pill" id="badge-temp-gpu">Normal</span>
+            <span class="status-badge-pill" id="badge-temp-gpu">N/A</span>
           </article>
 
           <!-- SSD -->
@@ -546,14 +556,17 @@
             <div class="temp-gauge-ring-box">
               <svg class="gauge-svg" viewBox="0 0 100 100">
                 <circle class="gauge-bg-ring" cx="50" cy="50" r="40" />
-                <circle class="gauge-progress-ring" id="ring-ssd-temp" cx="50" cy="50" r="40" stroke="#27D995" stroke-dasharray="251" stroke-dashoffset="160" />
+                <circle class="gauge-progress-ring" id="ring-ssd-temp" cx="50" cy="50" r="40" stroke="#27D995" stroke-dasharray="251" stroke-dashoffset="251" />
               </svg>
-              <span class="temp-val-center mono" id="gauge-temp-ssd">36°C</span>
+              <span class="temp-val-center mono" id="gauge-temp-ssd">--</span>
             </div>
             <span class="temp-label-bottom">SSD</span>
-            <span class="status-badge-pill" id="badge-temp-ssd">Normal</span>
+            <span class="status-badge-pill" id="badge-temp-ssd">N/A</span>
           </article>
         </div>
+
+        <!-- Sensor tambahan dari hwmon/EC -->
+        <div class="thermal-sensor-row" id="thermal-sensor-row"></div>
 
         <!-- Grafik Suhu Bottom Card -->
         <article class="card" id="thermal-history-card">
@@ -591,18 +604,18 @@
               <text class="chart-axis-label" x="32" y="135" text-anchor="end">0°C</text>
 
               <!-- Lines for CPU, GPU, SSD -->
-              <polyline id="thermal-line-cpu" fill="none" stroke="#19C9E8" stroke-width="2" stroke-linecap="round" points="40,75 80,72 120,74 160,70 200,68 240,72 280,71 320,69 360,72 400,70 440,68 480,71 520,70 560,72 590,70" />
-              <polyline id="thermal-line-gpu" fill="none" stroke="#168CFF" stroke-width="2" stroke-linecap="round" points="40,85 80,84 120,83 160,82 200,81 240,84 280,82 320,81 360,83 400,82 440,80 480,83 520,81 560,83 590,82" />
-              <polyline id="thermal-line-ssd" fill="none" stroke="#A855F7" stroke-width="2" stroke-linecap="round" points="40,95 80,94 120,95 160,94 200,94 240,95 280,94 320,95 360,94 400,95 440,94 480,95 520,94 560,95 590,94" />
+              <polyline id="thermal-line-cpu" fill="none" stroke="#19C9E8" stroke-width="2" stroke-linecap="round" />
+              <polyline id="thermal-line-gpu" fill="none" stroke="#168CFF" stroke-width="2" stroke-linecap="round" />
+              <polyline id="thermal-line-ssd" fill="none" stroke="#A855F7" stroke-width="2" stroke-linecap="round" />
 
               <!-- X Labels -->
-              <text class="chart-axis-label" x="40" y="146" text-anchor="middle">0m</text>
-              <text class="chart-axis-label" x="130" y="146" text-anchor="middle">5m</text>
-              <text class="chart-axis-label" x="220" y="146" text-anchor="middle">10m</text>
-              <text class="chart-axis-label" x="315" y="146" text-anchor="middle">15m</text>
-              <text class="chart-axis-label" x="405" y="146" text-anchor="middle">20m</text>
-              <text class="chart-axis-label" x="500" y="146" text-anchor="middle">25m</text>
-              <text class="chart-axis-label" x="590" y="146" text-anchor="middle">30m</text>
+              <text class="chart-axis-label" x="40" y="146" text-anchor="middle" id="thermal-x-0">0</text>
+              <text class="chart-axis-label" x="130" y="146" text-anchor="middle" id="thermal-x-1">0</text>
+              <text class="chart-axis-label" x="220" y="146" text-anchor="middle" id="thermal-x-2">0</text>
+              <text class="chart-axis-label" x="315" y="146" text-anchor="middle" id="thermal-x-3">0</text>
+              <text class="chart-axis-label" x="405" y="146" text-anchor="middle" id="thermal-x-4">0</text>
+              <text class="chart-axis-label" x="500" y="146" text-anchor="middle" id="thermal-x-5">0</text>
+              <text class="chart-axis-label" x="590" y="146" text-anchor="middle" id="thermal-x-6">0</text>
             </svg>
           </div>
         </article>
@@ -614,8 +627,8 @@
       <section class="panel-group" id="tab-gpu">
         <div class="screen-header">
           <div class="screen-header-left">
-            <h1>Pengaturan GPU</h1>
-            <p>Kelola penggunaan GPU Intel dan NVIDIA.</p>
+            <h1 data-i18n="screen.gpu.title">Pengaturan GPU</h1>
+            <p data-i18n="screen.gpu.sub">Kelola penggunaan GPU Intel dan NVIDIA.</p>
           </div>
         </div>
 
@@ -627,15 +640,15 @@
             <h3 class="card-title">Intel UHD Graphics</h3>
             <div class="gpu-card-stats">
               <div class="gpu-stat-box">
-                <span class="gpu-stat-num mono" id="gpu-i-util">0%</span>
+                <span class="gpu-stat-num mono" id="gpu-i-util">--</span>
                 <span class="gpu-stat-lbl">Utilisasi</span>
               </div>
               <div class="gpu-stat-box">
-                <span class="gpu-stat-num mono" id="gpu-i-temp">48°C</span>
+                <span class="gpu-stat-num mono" id="gpu-i-temp">--</span>
                 <span class="gpu-stat-lbl">Suhu</span>
               </div>
               <div class="gpu-stat-box">
-                <span class="gpu-stat-num mono" id="gpu-i-vram">0 MB</span>
+                <span class="gpu-stat-num mono" id="gpu-i-vram">--</span>
                 <span class="gpu-stat-lbl">VRAM</span>
               </div>
             </div>
@@ -643,18 +656,18 @@
 
           <!-- NVIDIA -->
           <article class="card">
-            <h3 class="card-title" id="gpu-nvidia-card-title">NVIDIA GeForce RTX</h3>
+            <h3 class="card-title" id="gpu-nvidia-card-title">GPU Diskret</h3>
             <div class="gpu-card-stats">
               <div class="gpu-stat-box">
-                <span class="gpu-stat-num mono" id="gpu-d-util">8%</span>
+                <span class="gpu-stat-num mono" id="gpu-d-util">--</span>
                 <span class="gpu-stat-lbl">Utilisasi</span>
               </div>
               <div class="gpu-stat-box">
-                <span class="gpu-stat-num mono" id="gpu-d-temp">42°C</span>
+                <span class="gpu-stat-num mono" id="gpu-d-temp">--</span>
                 <span class="gpu-stat-lbl">Suhu</span>
               </div>
               <div class="gpu-stat-box">
-                <span class="gpu-stat-num mono" id="gpu-d-vram">512 MB</span>
+                <span class="gpu-stat-num mono" id="gpu-d-vram">--</span>
                 <span class="gpu-stat-lbl">VRAM</span>
               </div>
             </div>
@@ -713,106 +726,190 @@
       </section>
 
       <!-- ===================================================================
+           SCREEN: ADVANCED RESOURCE MANAGEMENT ("Manajemen Sumber Daya")
+           =================================================================== -->
+      <section class="panel-group" id="tab-resource">
+        <div class="screen-header">
+          <div class="screen-header-left">
+            <h1 data-i18n="screen.resource.title">Manajemen Sumber Daya</h1>
+            <p data-i18n="screen.resource.sub">Pantau dan atur batas CPU/GPU secara otomatis.</p>
+          </div>
+          <button class="btn-primary" id="btn-refresh-resource">Segarkan</button>
+        </div>
+
+        <div class="grid grid-2">
+          <article class="card">
+            <h3 class="card-title">CPU</h3>
+            <div class="metric-row">
+              <span class="metric-label">Utilisasi</span>
+              <span class="metric-value mono" id="resource-cpu-util">--</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Suhu</span>
+              <span class="metric-value mono" id="resource-cpu-temp">--</span>
+            </div>
+          </article>
+          <article class="card">
+            <h3 class="card-title">GPU</h3>
+            <div class="metric-row">
+              <span class="metric-label">Utilisasi</span>
+              <span class="metric-value mono" id="resource-gpu-util">--</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Suhu</span>
+              <span class="metric-value mono" id="resource-gpu-temp">--</span>
+            </div>
+          </article>
+        </div>
+
+        <article class="card" style="margin-top: 16px;">
+          <div class="card-header-row">
+            <h3 class="card-title">Aturan Otomatisasi</h3>
+            <button class="btn-primary btn-sm" id="btn-add-rule">Tambah Aturan</button>
+          </div>
+          <div class="form-grid" style="gap: 8px; margin-bottom: 12px;">
+            <input type="text" id="rule-name" placeholder="Nama aturan" class="form-input" />
+            <select id="rule-metric" class="form-select">
+              <option value="CpuUtil">CPU Utilisasi</option>
+              <option value="GpuUtil">GPU Utilisasi</option>
+              <option value="CpuTemp">Suhu CPU</option>
+              <option value="GpuTemp">Suhu GPU</option>
+              <option value="GpuPowerW">Daya GPU (W)</option>
+              <option value="GpuVramPct">VRAM GPU (%)</option>
+            </select>
+            <input type="number" id="rule-warn" placeholder="Warn" class="form-input" />
+            <input type="number" id="rule-critical" placeholder="Critical" class="form-input" />
+            <select id="rule-action" class="form-select">
+              <option value="quiet">Mode Quiet</option>
+              <option value="balanced">Mode Balanced</option>
+              <option value="performance">Mode Performance</option>
+              <option value="notify">Notifikasi</option>
+            </select>
+          </div>
+          <div id="resource-rules-list"></div>
+        </article>
+      </section>
+
+      <!-- ===================================================================
+           SCREEN: RAM
+           =================================================================== -->
+      <section class="panel-group" id="tab-memory">
+        <div class="screen-header">
+          <div class="screen-header-left">
+            <h1 data-i18n="screen.memory.title">RAM</h1>
+            <p data-i18n="screen.memory.sub">Pantau memori fisik dan proses yang berjalan.</p>
+          </div>
+          <div class="screen-header-controls">
+            <button class="btn-secondary" id="mem-drop">Bersihkan Cache</button>
+          </div>
+        </div>
+
+        <div class="memory-summary-grid">
+          <article class="card">
+            <div class="metric-card-header"><span class="metric-label">RAM Terpakai</span></div>
+            <div class="metric-value-row"><span class="metric-value-big mono" id="mem-used">--</span></div>
+            <span class="metric-sub mono" id="mem-total">--</span>
+            <div class="memory-bar"><div class="memory-bar-fill" id="mem-bar-fill"></div></div>
+            <span class="mono small" id="mem-bar-label">--</span>
+          </article>
+          <article class="card">
+            <h3 class="card-title">Rincian Memori</h3>
+            <div class="metric-row"><span class="metric-label">Tersedia</span><span class="metric-value mono" id="mem-available">--</span></div>
+            <div class="metric-row"><span class="metric-label">Free</span><span class="metric-value mono" id="mem-free">--</span></div>
+            <div class="metric-row"><span class="metric-label">Cache / Buffer</span><span class="metric-value mono" id="mem-cached">--</span></div>
+            <div class="metric-row"><span class="metric-label">Swap</span><span class="metric-value mono" id="mem-swap">--</span></div>
+          </article>
+          <article class="card">
+            <h3 class="card-title">Tekanan &amp; GPU</h3>
+            <div class="metric-row"><span class="metric-label">Memory Pressure</span><span class="metric-value mono" id="mem-pressure">--</span></div>
+            <div class="metric-row"><span class="metric-label">VRAM</span><span class="metric-value mono" id="mem-vram">--</span></div>
+          </article>
+        </div>
+
+        <article class="card">
+          <h3 class="card-title">Modul RAM</h3>
+          <div id="dimms" class="dimms-list"></div>
+        </article>
+
+        <article class="card">
+          <div class="card-header-row">
+            <div>
+              <h3 class="card-title" style="margin-bottom:2px;">Task Manager</h3>
+              <span class="muted small" id="proc-count">-- proses</span>
+            </div>
+            <div class="proc-controls">
+              <input type="text" id="proc-filter" class="form-input" placeholder="Cari nama, PID, atau user" />
+              <button class="btn-secondary" id="proc-refresh">Segarkan</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr><th>PID</th><th>Nama</th><th>User</th><th>CPU</th><th>RAM</th><th>% RAM</th><th>Thread</th><th>Status</th><th></th></tr>
+              </thead>
+              <tbody id="proc-body"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <!-- ===================================================================
            SCREEN 6: FAN CONTROL ("Kontrol Kipas")
            =================================================================== -->
       <section class="panel-group" id="tab-fan">
         <div class="screen-header">
           <div class="screen-header-left">
-            <h1>Kontrol Kipas</h1>
-            <p>Atur kecepatan kipas sesuai kebutuhan Anda.</p>
+            <h1 data-i18n="screen.fan.title">Kontrol Kipas</h1>
+            <p data-i18n="screen.fan.sub">Atur kecepatan kipas sesuai kebutuhan Anda.</p>
           </div>
         </div>
 
         <!-- Fan Modes Pills -->
         <div class="fan-modes-wrap">
           <div class="segmented-pills" id="fan-modes-pills">
-            <button class="seg-pill active" data-fan-mode="auto">Auto</button>
-            <button class="seg-pill" data-fan-mode="silent">Silent</button>
-            <button class="seg-pill" data-fan-mode="performance">Performance</button>
-            <button class="seg-pill" data-fan-mode="custom">Custom</button>
+            <button class="seg-pill" data-fan-mode="standard">Standard</button>
+            <button class="seg-pill" data-fan-mode="silent">Super Silent</button>
+            <button class="seg-pill" data-fan-mode="dust">Dust Cleaning</button>
+            <button class="seg-pill" data-fan-mode="cooling">Efficient Cooling</button>
           </div>
         </div>
+        <div class="muted small" id="fan-unavailable-note" style="display:none; margin-bottom:12px;">
+          Firmware laptop ini tidak mengekspos kontrol mode kipas. Nilai RPM tetap ditampilkan jika tersedia.
+        </div>
 
-        <!-- 2 Fan Circular Gauges (CPU Fan & GPU Fan) -->
+        <!-- Fan RPM gauges -->
         <div class="fan-gauges-row-2">
-          <!-- CPU Fan -->
-          <article class="card fan-gauge-card">
+          <!-- Fan 1 -->
+          <article class="card fan-gauge-card" id="fan-card-cpu">
             <div class="fan-gauge-ring-box">
               <svg class="gauge-svg" viewBox="0 0 100 100">
                 <circle class="gauge-bg-ring" cx="50" cy="50" r="42" />
-                <circle class="gauge-progress-ring" id="ring-fan-cpu" cx="50" cy="50" r="42" stroke="#19C9E8" stroke-dasharray="264" stroke-dashoffset="130" />
+                <circle class="gauge-progress-ring" id="ring-fan-cpu" cx="50" cy="50" r="42" stroke="#19C9E8" stroke-dasharray="264" stroke-dashoffset="264" />
               </svg>
               <div class="fan-val-center">
-                <span class="fan-rpm-num mono" id="fan-cpu-rpm">1200 RPM</span>
-                <span class="fan-label-sub">CPU Fan</span>
+                <span class="fan-rpm-num mono" id="fan-cpu-rpm">N/A</span>
+                <span class="fan-label-sub">Fan 1</span>
               </div>
             </div>
-            <span class="badge-fan-mode" id="badge-fan-cpu-mode">Auto</span>
+            <span class="badge-fan-mode" id="badge-fan-cpu-mode">Tidak tersedia</span>
           </article>
 
-          <!-- GPU Fan -->
-          <article class="card fan-gauge-card">
+          <!-- Fan 2 -->
+          <article class="card fan-gauge-card" id="fan-card-gpu">
             <div class="fan-gauge-ring-box">
               <svg class="gauge-svg" viewBox="0 0 100 100">
                 <circle class="gauge-bg-ring" cx="50" cy="50" r="42" />
-                <circle class="gauge-progress-ring" id="ring-fan-gpu" cx="50" cy="50" r="42" stroke="#A855F7" stroke-dasharray="264" stroke-dashoffset="145" />
+                <circle class="gauge-progress-ring" id="ring-fan-gpu" cx="50" cy="50" r="42" stroke="#A855F7" stroke-dasharray="264" stroke-dashoffset="264" />
               </svg>
               <div class="fan-val-center">
-                <span class="fan-rpm-num mono" id="fan-gpu-rpm">1100 RPM</span>
-                <span class="fan-label-sub">GPU Fan</span>
+                <span class="fan-rpm-num mono" id="fan-gpu-rpm">N/A</span>
+                <span class="fan-label-sub">Fan 2</span>
               </div>
             </div>
-            <span class="badge-fan-mode" id="badge-fan-gpu-mode">Auto</span>
+            <span class="badge-fan-mode" id="badge-fan-gpu-mode">Tidak tersedia</span>
           </article>
         </div>
 
-        <!-- Kurva Kipas (Custom) Card -->
-        <article class="card">
-          <div class="chart-header-row">
-            <div style="display: flex; align-items: center; gap: 18px;">
-              <h3 class="card-title" style="margin-bottom: 0;">Kurva Kipas (Custom)</h3>
-              <div class="chart-legend-row">
-                <span><span class="legend-dot" style="background: #19C9E8;"></span>CPU</span>
-                <span><span class="legend-dot" style="background: #A855F7;"></span>GPU</span>
-              </div>
-            </div>
-            <div style="display: flex; gap: 8px;">
-              <button class="btn-secondary" id="btn-fan-reset">Reset Bawaan</button>
-              <button class="btn-primary" id="btn-fan-apply">Terapkan</button>
-            </div>
-          </div>
-
-          <div class="fan-curve-canvas">
-            <svg class="chart-svg" viewBox="0 0 500 160" preserveAspectRatio="none" id="fan-curve-editor-svg">
-              <!-- Grid lines -->
-              <line class="chart-grid-line" x1="45" y1="20" x2="480" y2="20" />
-              <line class="chart-grid-line" x1="45" y1="75" x2="480" y2="75" />
-              <line class="chart-grid-line" x1="45" y1="130" x2="480" y2="130" />
-
-              <!-- Y Labels -->
-              <text class="chart-axis-label" x="38" y="24" text-anchor="end">100%</text>
-              <text class="chart-axis-label" x="38" y="79" text-anchor="end">50%</text>
-              <text class="chart-axis-label" x="38" y="134" text-anchor="end">0%</text>
-
-              <!-- Curve Path -->
-              <polyline id="fan-curve-line" fill="none" stroke="#19C9E8" stroke-width="2.5" stroke-linecap="round" points="45,130 150,130 250,90 350,55 450,25" />
-
-              <!-- Control points (clickable / draggable) -->
-              <circle cx="45" cy="130" r="5" fill="#19C9E8" stroke="#FFFFFF" stroke-width="2" class="curve-pt" />
-              <circle cx="150" cy="130" r="5" fill="#19C9E8" stroke="#FFFFFF" stroke-width="2" class="curve-pt" />
-              <circle cx="250" cy="90" r="5" fill="#19C9E8" stroke="#FFFFFF" stroke-width="2" class="curve-pt" />
-              <circle cx="350" cy="55" r="5" fill="#19C9E8" stroke="#FFFFFF" stroke-width="2" class="curve-pt" />
-              <circle cx="450" cy="25" r="5" fill="#19C9E8" stroke="#FFFFFF" stroke-width="2" class="curve-pt" />
-
-              <!-- X Labels -->
-              <text class="chart-axis-label" x="45" y="148" text-anchor="middle">0°C</text>
-              <text class="chart-axis-label" x="150" y="148" text-anchor="middle">40°C</text>
-              <text class="chart-axis-label" x="250" y="148" text-anchor="middle">60°C</text>
-              <text class="chart-axis-label" x="350" y="148" text-anchor="middle">80°C</text>
-              <text class="chart-axis-label" x="450" y="148" text-anchor="middle">100°C</text>
-            </svg>
-          </div>
-        </article>
       </section>
 
       <!-- ===================================================================
@@ -821,11 +918,42 @@
       <section class="panel-group" id="tab-device">
         <div class="screen-header">
           <div class="screen-header-left">
-            <h1>Pengaturan Perangkat</h1>
-            <p>Kelola fitur perangkat keras laptop Anda.</p>
+            <h1 data-i18n="screen.device.title">Pengaturan Perangkat</h1>
+            <p data-i18n="screen.device.sub">Kelola fitur perangkat keras laptop Anda.</p>
           </div>
+          <button class="btn-secondary" id="btn-refresh-device-info">Pindai Ulang</button>
         </div>
 
+        <article class="card device-info-card">
+          <div class="card-header-row">
+            <h3 class="card-title">Informasi Perangkat</h3>
+            <span class="muted small">Dibaca dari DMI, OS, CPU, GPU, dan storage</span>
+          </div>
+          <div class="device-info-grid">
+            <div><span class="device-info-label">Model</span><span class="device-info-value" id="dev-info-model">--</span></div>
+            <div><span class="device-info-label">Keluarga Produk</span><span class="device-info-value" id="dev-info-family">--</span></div>
+            <div><span class="device-info-label">Versi</span><span class="device-info-value" id="dev-info-version">--</span></div>
+            <div><span class="device-info-label">Serial</span><span class="device-info-value mono" id="dev-info-serial">--</span></div>
+            <div><span class="device-info-label">Mainboard</span><span class="device-info-value mono" id="dev-info-board">--</span></div>
+            <div><span class="device-info-label">BIOS</span><span class="device-info-value" id="dev-info-bios">--</span></div>
+            <div><span class="device-info-label">Sistem Operasi</span><span class="device-info-value" id="dev-info-os">--</span></div>
+            <div><span class="device-info-label">Kernel</span><span class="device-info-value mono" id="dev-info-kernel">--</span></div>
+            <div><span class="device-info-label">Desktop</span><span class="device-info-value" id="dev-info-session">--</span></div>
+            <div><span class="device-info-label">Hostname</span><span class="device-info-value mono" id="dev-info-host">--</span></div>
+            <div><span class="device-info-label">CPU</span><span class="device-info-value" id="dev-info-cpu">--</span></div>
+            <div><span class="device-info-label">Core / Thread</span><span class="device-info-value mono" id="dev-info-cpu-cores">--</span></div>
+            <div><span class="device-info-label">GPU</span><span class="device-info-value" id="dev-info-gpu">--</span></div>
+            <div><span class="device-info-label">Driver GPU</span><span class="device-info-value" id="dev-info-gpu-driver">--</span></div>
+            <div><span class="device-info-label">Storage</span><span class="device-info-value" id="dev-info-storage">--</span></div>
+            <div><span class="device-info-label">RAM</span><span class="device-info-value" id="dev-info-memory">--</span></div>
+            <div><span class="device-info-label">Uptime</span><span class="device-info-value" id="dev-info-uptime">--</span></div>
+            <div><span class="device-info-label">Kesehatan Baterai</span><span class="device-info-value" id="dev-info-health">--</span></div>
+            <div><span class="device-info-label">Siklus Baterai</span><span class="device-info-value mono" id="dev-info-cycles">--</span></div>
+            <div><span class="device-info-label">Skor Sistem</span><span class="device-info-value mono" id="dev-info-health-score">--</span></div>
+          </div>
+        </article>
+
+        <h2 class="section-title">Preferensi Perangkat</h2>
         <div class="device-settings-list">
           <!-- Keyboard Backlight -->
           <div class="device-setting-row">
@@ -933,8 +1061,8 @@
       <section class="panel-group" id="tab-diagnostics">
         <div class="screen-header">
           <div class="screen-header-left">
-            <h1>Diagnostik & Pemindaian</h1>
-            <p>Periksa kesehatan sistem dan perangkat Anda.</p>
+            <h1 data-i18n="screen.diagnostics.title">Diagnostik & Pemindaian</h1>
+            <p data-i18n="screen.diagnostics.sub">Periksa kesehatan sistem dan perangkat Anda.</p>
           </div>
         </div>
 
@@ -1015,8 +1143,8 @@
       <section class="panel-group" id="tab-settings">
         <div class="screen-header">
           <div class="screen-header-left">
-            <h1>Pengaturan</h1>
-            <p>Sesuaikan preferensi aplikasi.</p>
+            <h1 data-i18n="screen.settings.title">Pengaturan</h1>
+            <p data-i18n="screen.settings.sub">Sesuaikan preferensi aplikasi.</p>
           </div>
         </div>
 
@@ -1119,22 +1247,22 @@
         <!-- Tab Content: Tentang -->
         <div class="settings-tab-content" id="subtab-tentang" style="display: none;">
           <article class="card settings-group-card">
-            <h3 class="card-title">Tentang Lenovo Vantage Linux</h3>
+            <h3 class="card-title">Tentang Vantage Linux</h3>
             <div class="settings-field-row">
               <span class="settings-field-label">Versi Aplikasi</span>
               <span class="mono" style="color: var(--text-secondary);">0.1.0 (Stable)</span>
             </div>
             <div class="settings-field-row">
               <span class="settings-field-label">Model Laptop</span>
-              <span id="about-device-model" style="color: var(--text-secondary);">Lenovo LOQ 15IAX9E (83LK)</span>
+              <span id="about-device-model" style="color: var(--text-secondary);">--</span>
             </div>
             <div class="settings-field-row">
               <span class="settings-field-label">Sistem Operasi</span>
-              <span id="about-os" style="color: var(--text-secondary);">CachyOS Linux (x86_64)</span>
+              <span id="about-os" style="color: var(--text-secondary);">--</span>
             </div>
             <div class="settings-field-row">
               <span class="settings-field-label">Backend Daemon / Helper</span>
-              <span class="mono" id="about-helper" style="color: var(--success);">loq-helper v0.1.0 Ready</span>
+              <span class="mono" id="about-helper" style="color: var(--success);">--</span>
             </div>
             <div class="settings-field-row">
               <span class="settings-field-label">Lisensi</span>

@@ -53,10 +53,11 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
         eprintln!(
-            "Usage: loq-helper <subcommand> [args...]\n  \
+            "Usage: vantage-helper <subcommand> [args...]\n  \
              fan-curve <fan_id> <json>\n  \
              fan-manual <fan_id> <pwm%>\n  \
              fan-auto <fan_id>\n  \
+             fan-mode <0|1|2|4|silent|standard|dust|cooling>\n  \
              gpu-switch <integrated|hybrid|nvidia>\n  \
              power-limit <attr_name> <watts>\n  \
              battery-conservation <0|1>\n  \
@@ -69,6 +70,7 @@ fn main() {
              gpu-runtime-pm <auto|on>\n  \
              memory-info\n  \
              drop-caches\n  \
+             kill-process <pid> <TERM|KILL>\n  \
              version"
         );
         exit(1);
@@ -90,6 +92,10 @@ fn main() {
         "fan-auto" => match args.get(2) {
             Some(id) => fan_auto(id),
             None => usage("fan-auto <fan_id>"),
+        },
+        "fan-mode" => match args.get(2) {
+            Some(mode) => fan_mode(mode),
+            None => usage("fan-mode <0|1|2|4|silent|standard|dust|cooling>"),
         },
         "gpu-switch" => match args.get(2) {
             Some(mode) => gpu_switch(mode),
@@ -133,6 +139,10 @@ fn main() {
         },
         "memory-info" => memory_info(),
         "drop-caches" => drop_caches(),
+        "kill-process" => match (args.get(2), args.get(3)) {
+            (Some(pid), Some(signal)) => kill_process(pid, signal),
+            _ => usage("kill-process <pid> <TERM|KILL>"),
+        },
         other => {
             eprintln!("ERROR: unknown subcommand: {other}");
             1
@@ -142,7 +152,7 @@ fn main() {
 }
 
 fn usage(text: &str) -> i32 {
-    eprintln!("Usage: loq-helper {text}");
+    eprintln!("Usage: vantage-helper {text}");
     1
 }
 
@@ -337,6 +347,43 @@ fn fan_auto(fan_id_raw: &str) -> i32 {
         }
     }
     println!("Fan automatic control restored.");
+    0
+}
+
+fn fan_mode(raw: &str) -> i32 {
+    let value = match raw.trim().to_lowercase().replace('_', "-").as_str() {
+        "0" | "silent" | "quiet" | "super-silent" => 0,
+        "1" | "standard" | "auto" | "balanced" | "normal" => 1,
+        "2" | "dust" | "dust-cleaning" => 2,
+        "4" | "cooling" | "performance" | "full" | "max" => 4,
+        _ => {
+            eprintln!("ERROR: fan mode must be 0/1/2/4 or silent/standard/dust/cooling.");
+            return 1;
+        }
+    };
+    let candidates = [
+        "/sys/devices/pci0000:00/0000:00:1f.0/PNP0C09:00/VPC2004:00/fan_mode",
+        "/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/fan_mode",
+    ];
+    let path = match candidates.iter().map(PathBuf::from).find(|p| p.is_file()) {
+        Some(path) => path,
+        None => {
+            eprintln!("ERROR: fan_mode is not exported by this kernel/firmware.");
+            return 1;
+        }
+    };
+    if let Err(e) = write_sysfs(&path, &value.to_string()) {
+        eprintln!("ERROR: {e}");
+        return 1;
+    }
+    let readback = fs::read_to_string(&path)
+        .map(|v| v.trim().to_string())
+        .unwrap_or_else(|_| "unknown".into());
+    if readback != value.to_string() {
+        eprintln!("ERROR: firmware readback mismatch (wanted {value}, got {readback}).");
+        return 1;
+    }
+    println!("Fan mode set to {value} (readback: {readback}).");
     0
 }
 
@@ -745,6 +792,38 @@ fn drop_caches() -> i32 {
         }
         Err(e) => {
             eprintln!("ERROR: {e}");
+            1
+        }
+    }
+}
+
+fn kill_process(pid_raw: &str, signal: &str) -> i32 {
+    let pid = match pid_raw.parse::<i32>() {
+        Ok(pid) if pid > 1 => pid,
+        _ => {
+            eprintln!("ERROR: pid must be an integer greater than 1.");
+            return 1;
+        }
+    };
+    if signal != "TERM" && signal != "KILL" {
+        eprintln!("ERROR: signal must be TERM or KILL.");
+        return 1;
+    }
+    match Command::new("kill")
+        .arg(format!("-{signal}"))
+        .arg(pid.to_string())
+        .status()
+    {
+        Ok(status) if status.success() => {
+            println!("Sent SIG{signal} to PID {pid}.");
+            0
+        }
+        Ok(status) => {
+            eprintln!("ERROR: kill exited with {status}.");
+            1
+        }
+        Err(e) => {
+            eprintln!("ERROR: kill failed: {e}");
             1
         }
     }

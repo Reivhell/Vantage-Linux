@@ -4,8 +4,8 @@
   "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
 <policyconfig>
 
-  <action id="com.github.loq-control.helper">
-    <description>LOQ Control Center hardware control</description>
+  <action id="com.github.vantagelinux.helper">
+    <description>Vantage Linux hardware control</description>
     <message>Authentication is required to modify fan control settings or switch GPU mode.</message>
     <icon_name>preferences-system</icon_name>
     <defaults>
@@ -16,7 +16,7 @@
       <!-- Active console user: ask for admin password, cache for session -->
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/loq-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/vantage-helper</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 

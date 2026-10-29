@@ -1,0 +1,158 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    name: Package Linux release
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            pkg-config \
+            wget
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Resolve and verify version
+        id: version
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n 1)"
+          conf_version="$(python3 -c 'import json; print(json.load(open("src-tauri/tauri.conf.json"))["version"])')"
+
+          test -n "$version"
+          if [ "$version" != "$conf_version" ]; then
+            echo "::error::src-tauri/Cargo.toml ($version) and tauri.conf.json ($conf_version) versions differ"
+            exit 1
+          fi
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "v$version" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match project version v$version"
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "package=vantage-linux-${version}-linux-x86_64" >> "$GITHUB_OUTPUT"
+
+      - name: Verify release assets
+        run: |
+          for asset in \
+            src-tauri/icons/Icon.avif \
+            src-tauri/icons/icon.png \
+            frontend/img/lenovo.avif \
+            frontend/js/resource.js
+          do
+            if [ ! -f "$asset" ]; then
+              echo "::error file=$asset::required release asset is missing; commit it before tagging"
+              exit 1
+            fi
+          done
+
+      - name: Cargo test
+        run: cargo test --workspace
+
+      - name: Build release binaries
+        run: cargo build --release --workspace
+
+      - name: Package release
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PACKAGE: ${{ steps.version.outputs.package }}
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          mkdir -p "dist/$PACKAGE"
+
+          tar \
+            --exclude='./.git' \
+            --exclude='./dist' \
+            --exclude='./target' \
+            --exclude='./src-tauri/gen' \
+            -cf - . | tar -xf - -C "dist/$PACKAGE"
+
+          install -Dm755 target/release/vantage-linux "dist/$PACKAGE/target/release/vantage-linux"
+          install -Dm755 target/release/vantage-helper "dist/$PACKAGE/target/release/vantage-helper"
+
+          cat > "dist/$PACKAGE/BUILD_INFO.txt" <<EOF
+          version=$VERSION
+          commit=${GITHUB_SHA}
+          ref=${GITHUB_REF_NAME}
+          built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EOF
+
+          tar -C dist -czf "dist/$PACKAGE.tar.gz" "$PACKAGE"
+          (
+            cd dist
+            sha256sum "$PACKAGE.tar.gz" > "$PACKAGE.tar.gz.sha256"
+          )
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.package }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Vantage Linux ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          body: |
+            Linux x86_64 build of Vantage Linux.
+
+            Extract the archive and install the included binaries:
+
+            ```bash
+            tar -xzf vantage-linux-*.tar.gz
+            cd vantage-linux-*-linux-x86_64
+            sudo ./scripts/install.sh --no-build
+            ```
+
+            The archive contains the source tree as well, so a normal build with
+            `sudo ./scripts/install.sh` also works on supported distributions.
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256

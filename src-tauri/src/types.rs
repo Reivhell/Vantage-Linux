@@ -10,10 +10,15 @@ pub struct SimpleResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessInfo {
     pub pid: i32,
+    pub parent_pid: Option<i32>,
     pub name: String,
     pub user: String,
     pub cpu: f32,
     pub memory_mb: f64,
+    pub memory_pct: f32,
+    pub status: String,
+    pub threads: u32,
+    pub start_time: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

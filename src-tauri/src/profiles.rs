@@ -3,11 +3,11 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Lokasi berkas profil (XDG-compliant: ~/.config/loq-control/profiles.json).
+/// Lokasi berkas profil (XDG-compliant: ~/.config/vantage-linux/profiles.json).
 fn profiles_path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_default();
     Path::new(&home)
-        .join(".config/loq-control/profiles.json")
+        .join(".config/vantage-linux/profiles.json")
         .to_path_buf()
 }
 

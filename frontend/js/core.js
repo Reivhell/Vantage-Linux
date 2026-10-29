@@ -25,6 +25,98 @@ export const listen = (event, callback) => {
 
 export const $ = (id) => document.getElementById(id);
 
+const STRINGS_ID = {
+  "nav.home": "Home",
+  "nav.performance": "Performance",
+  "nav.battery": "Battery",
+  "nav.thermal": "Thermal",
+  "nav.gpu": "GPU",
+  "nav.device": "Device",
+  "nav.diagnostics": "Diagnostik",
+  "nav.settings": "Pengaturan",
+  "nav.resource": "Sumber Daya",
+  "nav.memory": "RAM & Tasks",
+  "screen.home.title": "Selamat datang!",
+  "screen.home.sub": "Atur performa laptop Anda sesuai kebutuhan.",
+  "screen.performance.title": "Mode Performa",
+  "screen.performance.sub": "Pilih mode yang sesuai dengan aktivitas Anda.",
+  "screen.battery.title": "Battery",
+  "screen.battery.sub": "Pantau kesehatan baterai dan pengisiannya.",
+  "screen.thermal.title": "System Temperature",
+  "screen.thermal.sub": "Pantau suhu komponen laptop Anda secara real-time.",
+  "screen.gpu.title": "Pengaturan GPU",
+  "screen.gpu.sub": "Kelola penggunaan GPU Intel dan NVIDIA.",
+  "screen.resource.title": "Manajemen Sumber Daya",
+  "screen.resource.sub": "Pantau dan atur batas CPU/GPU secara otomatis.",
+  "screen.memory.title": "RAM & Tasks",
+  "screen.memory.sub": "Pantau memori fisik dan proses yang berjalan.",
+  "screen.fan.title": "Kontrol Kipas",
+  "screen.fan.sub": "Atur kecepatan kipas sesuai kebutuhan Anda.",
+  "screen.device.title": "Pengaturan Perangkat",
+  "screen.device.sub": "Kelola fitur perangkat keras laptop Anda.",
+  "screen.diagnostics.title": "Diagnostik & Pemindaian",
+  "screen.diagnostics.sub": "Periksa kesehatan sistem dan perangkat Anda.",
+  "screen.settings.title": "Pengaturan",
+  "screen.settings.sub": "Sesuaikan preferensi aplikasi.",
+};
+
+const STRINGS_EN = {
+  "nav.home": "Home",
+  "nav.performance": "Performance",
+  "nav.battery": "Battery",
+  "nav.thermal": "Thermal",
+  "nav.gpu": "GPU",
+  "nav.device": "Device",
+  "nav.diagnostics": "Diagnostics",
+  "nav.settings": "Settings",
+  "nav.resource": "Resource Management",
+  "nav.memory": "RAM & Tasks",
+  "screen.home.title": "Welcome",
+  "screen.home.sub": "Tune your laptop performance to your needs.",
+  "screen.performance.title": "Performance Mode",
+  "screen.performance.sub": "Choose the mode that fits your activity.",
+  "screen.battery.title": "Battery",
+  "screen.battery.sub": "Monitor battery health and charging.",
+  "screen.thermal.title": "System Temperature",
+  "screen.thermal.sub": "Monitor component temperatures in real time.",
+  "screen.gpu.title": "GPU Settings",
+  "screen.gpu.sub": "Manage Intel and NVIDIA GPU usage.",
+  "screen.resource.title": "Resource Management",
+  "screen.resource.sub": "Monitor and automate CPU/GPU thresholds.",
+  "screen.memory.title": "RAM & Tasks",
+  "screen.memory.sub": "Monitor physical memory and running processes.",
+  "screen.fan.title": "Fan Control",
+  "screen.fan.sub": "Set fan speed to your needs.",
+  "screen.device.title": "Device Settings",
+  "screen.device.sub": "Manage your laptop hardware features.",
+  "screen.diagnostics.title": "Diagnostics & Scan",
+  "screen.diagnostics.sub": "Check system and device health.",
+  "screen.settings.title": "Settings",
+  "screen.settings.sub": "Adjust app preferences.",
+};
+
+let locale = "id";
+
+export function setLocale(loc) {
+  if (loc === "id" || loc === "en") locale = loc;
+}
+
+export function t(key) {
+  const table = locale === "en" ? STRINGS_EN : STRINGS_ID;
+  return table[key] || key;
+}
+
+export function applyI18n() {
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    const key = el.getAttribute("data-i18n");
+    const val = t(key);
+    if (!val) return;
+    const label = el.matches("button") ? el.querySelector("span") : null;
+    if (label) label.textContent = val;
+    else el.textContent = val;
+  });
+}
+
 export const fmt = (n, digits = 1) =>
   n === null || n === undefined || Number.isNaN(n) ? "--" : Number(n).toFixed(digits);
 
@@ -86,26 +178,9 @@ export function showModal(title, contentHtml, onOk) {
   };
 }
 
-// Fallback mock responses when running in standard browser preview
-function mockInvoke(cmd, args) {
+// Browser preview only. Hardware commands return no data; run the Tauri app for real values.
+function mockInvoke(cmd) {
   switch (cmd) {
-    case "cmd_get_device_info":
-      return {
-        vendor: "Lenovo",
-        product: "LOQ 15IAX9E",
-        version: "83LK",
-        board: "LNVNB161216",
-        bios_label: "NECN38WW · 10/12/2024",
-        kernel: "6.12.0-cachyos",
-        cpu_model: "12th Gen Intel Core i5-12450HX",
-        memory_total_gb: 16.0,
-        memory_label: "16.0 GB",
-        uptime_label: "4j 22m",
-        battery_health_pct: 92.0,
-        battery_cycles: 78,
-        health_score: 95,
-        health_level: "good",
-      };
     case "cmd_get_presets":
       return [
         { key: "quiet", label: "Quiet", description: "Kebisingan rendah, daya hemat.", active: false, available: true },
@@ -113,68 +188,9 @@ function mockInvoke(cmd, args) {
         { key: "performance", label: "Performance", description: "Performa maksimal untuk game dan aplikasi berat.", active: false, available: true },
         { key: "custom", label: "Custom", description: "Atur sendiri sesuai kebutuhan.", active: false, available: true },
       ];
-    case "cmd_get_stats_snapshot":
-      return {
-        timestamp: Date.now() / 1000,
-        cpu_percent: 12.4,
-        gpu_percent: 8.0,
-        ram_percent: 34.0,
-        battery_percent: 78,
-        fan1_rpm: 1200,
-        fan2_rpm: 1100,
-        temp_cpu: 48,
-        temp_gpu: 42,
-        view: {
-          cpu_percent: "12%",
-          cpu_freq: "2.8 GHz",
-          gpu_percent: "8%",
-          ram_percent: "34%",
-          ram_used: "5.4 / 16 GB",
-          battery: "78%",
-          fan_rpm: "1200 / 1100 RPM",
-        },
-      };
-    case "cmd_get_battery_detail":
-      return {
-        available: true,
-        percent: 78,
-        status: "Discharging",
-        health_pct: 92.0,
-        cycles: 78,
-        energy_full_wh: 56.4,
-        energy_design_wh: 60.0,
-        threshold_available: true,
-        threshold_pct: 80,
-      };
-    case "cmd_get_gpu_mode":
-      return {
-        mode: "hybrid",
-        mode_label: "Hybrid Mode (disarankan)",
-        pending: null,
-        backend: "supergfxctl",
-        conflict: "",
-        modes: [
-          { key: "hybrid", label: "Hybrid Mode (disarankan)", hint: "Otomatis beralih antara iGPU dan dGPU." },
-          { key: "nvidia", label: "Discrete GPU Mode", hint: "Performa grafis maksimal." },
-          { key: "integrated", label: "Integrated GPU Mode", hint: "Hemat daya maksimal." },
-        ],
-      };
-    case "cmd_get_device_settings":
-      return {
-        keyboard_backlight: true,
-        touchpad: true,
-        camera: true,
-        fn_lock: false,
-        win_key: true,
-        usb_charging: false,
-        vantage_key: true,
-        overdrive: false,
-      };
-    case "cmd_set_device_setting":
-      return { ok: true, message: "Setting saved" };
-    case "cmd_apply_preset":
-      return { ok: true, message: "Preset applied" };
+    case "cmd_battery_history":
+      return [];
     default:
-      return { ok: true, message: "ok" };
+      return null;
   }
 }

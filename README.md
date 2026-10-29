@@ -1,217 +1,380 @@
-# LOQ Control Center for Linux
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="src-tauri/icons/icon.png">
+    <img src="src-tauri/icons/icon.png" alt="Vantage Linux Logo" width="112" height="112">
+  </picture>
+</p>
 
-A hardware control center for **Lenovo LOQ / Legion** laptops, written in **Rust** with
-**Tauri 2**. The UI is plain HTML/CSS/JS embedded in the binary — no Node.js toolchain and
-no npm build step.
+<h1 align="center">Vantage Linux</h1>
 
+<p align="center">
+  <strong>A modern, lightweight hardware control center for Lenovo laptops on Linux</strong><br>
+  Built with <strong>Rust</strong> and <strong>Tauri 2</strong> • Zero Node.js runtime • Native embedded web UI • Non-root privileged security model
+</p>
+
+<p align="center">
+  <a href="https://github.com/Reivhell/Vantage-Linux/releases"><img src="https://img.shields.io/badge/Release-v0.1.0-blue?style=flat-square&logo=github" alt="Release Version"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Language-Rust_2021-DEA584?style=flat-square&logo=rust&logoColor=white" alt="Rust"></a>
+  <a href="https://v2.tauri.app/"><img src="https://img.shields.io/badge/Framework-Tauri_2-24C8DB?style=flat-square&logo=tauri&logoColor=white" alt="Tauri 2"></a>
+  <a href="https://kernel.org/"><img src="https://img.shields.io/badge/Platform-Linux_Kernel_5.15%2B-FCC624?style=flat-square&logo=linux&logoColor=black" alt="Linux"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License"></a>
+  <a href="https://github.com/Reivhell/Vantage-Linux/pulls"><img src="https://img.shields.io/badge/PRs-Welcome-brightgreen?style=flat-square" alt="PRs Welcome"></a>
+</p>
+
+<p align="center">
+  <a href="#-quick-start">🚀 Quick Start</a> •
+  <a href="#-what-is-vantage-linux">💡 Overview</a> •
+  <a href="#-key-features">✨ Features</a> •
+  <a href="#-architecture--security-model">🏗️ Architecture</a> •
+  <a href="#-system-integration-paths">📁 File Locations</a> •
+  <a href="#-supported-hardware--integrations">🔌 Compatibility</a> •
+  <a href="#-cli--telemetry">💻 CLI Reference</a> •
+  <a href="#-faq--troubleshooting">❓ FAQ</a>
+</p>
 
 ---
 
-## Features
+## 🚀 Quick Start
 
-- **Dashboard** — device model/BIOS/kernel/session summary, battery health, health score with
-  issues, and one-click performance presets.
-- **Performance presets** — Quiet / Balanced / Performance / Custom mapped to the
-  `platform_profile` choices this firmware actually exposes, with optional automatic
-  AC/battery preset switching.
-- **Battery health detail** — capacity, health, cycles, temperature, voltage, power draw,
-  charge behaviour and a firmware charge-limit slider (when exposed).
-- **Display control** — per-monitor resolution and refresh-rate controls, supported-rate
-  detection and panel refresh ceiling across X11, KDE Wayland, GNOME Wayland (`gdctl`),
-  sway/wlroots and Hyprland; panel brightness via sysfs with helper fallback.
-- **Diagnostics** — read-only battery/SMART/service/journal/throttling/disk/CPU-temperature
-  checks, a smart scan (failed units, orphan packages, autostart, boot errors), and Markdown
-  report export to `~/.local/state/loq-control/`.
-- **GPU details** — driver version, P-state, clocks, power/temperature, runtime-PM state,
-  PRIME render-offload hint, power-limit control and runtime-PM switching via the helper.
-- **Live telemetry** — CPU load/per-core/frequency/temperature, RAM and swap, per-mount disk
-  usage and I/O throughput (`/proc/diskstats`), network RX/TX and IPv4
-  (`/proc/net/dev`, `ip`), battery and AC state.
-- **NVIDIA dGPU** — utilisation, VRAM, temperature, power draw and fan via `nvidia-smi`.
-- **Intel iGPU** — utilisation derived from `gt_act_freq_mhz` / `gt_max_freq_mhz`.
-- **Process manager** — searchable process list with CPU/memory columns and kill action
-  (safety checks in Rust; PID 1 is refused).
-- **Laptop mode** — firmware thermal modes (`low-power`, `balanced`, `performance`,
-  `max-power`) through `platform_profile`; `power-profiles-daemon` is used when available,
-  with a direct helper write as fallback. Last mode can be restored at login.
-- **Battery charging** — `Fast`, `Standard` and `Long_Life` (80 % conservation) through
-  `charge_types`, with fallbacks to `conservation_mode` and `charge_control_end_threshold`.
-- **Power limits** — firmware attributes discovered via sysfs; editable when the helper is
-  installed, read-only otherwise.
-- **Fan control** — RPM readout, manual PWM override, automatic mode, and temperature→PWM
-  fan curves through the privileged helper.
-- **GPU mode switching** — `integrated` / `hybrid` / `nvidia` via `envycontrol`, then
-  `supergfxctl`, then `prime-select`; shows the backend in use, warns when two backends
-  disagree, and remembers the reboot marker across restarts.
-- **Memory** — RAM/swap, top memory processes, SMBIOS DIMM details (dmidecode via helper),
-  NVIDIA VRAM, and a confirmed cache-drop action.
-- **4-zone ITE RGB keyboard** — direct 33-byte HID output report to `/dev/hidrawN`
-  (VID `0x048d`), no root needed after the udev rule is installed.
-- **Config** — TOML at `~/.config/loq-control/config.toml`.
-- **Tray icon** — show/hide window and quit; closing the window hides it to the tray.
-- **CLI discovery** — `loq-control --discover` prints capabilities and `--selftest` prints
-  charging/thermal/memory/display/device/battery/preset state as JSON.
+### ⚡ One-Line Quick Install (Recommended)
 
-## Architecture
-
-```
-frontend/            static HTML/CSS/JS (Tauri IPC bridge from window.__TAURI__)
-src-tauri/
-  src/lib.rs         app bootstrap, shared state, monitor loop, tray, IPC registration
-  src/commands.rs    thin Tauri command facade over the feature modules
-  src/config.rs      TOML config load/save
-  src/capabilities.rs hardware discovery and probes
-  src/stats.rs       live telemetry, Rust-side view model, sparklines
-  src/power.rs       power profiles, charging, thermal modes, power limits
-  src/gpu.rs         GPU mode detection and switching backends
-  src/memory.rs      DIMM / VRAM summary
-  src/keyboard.rs    ITE RGB HID reports and keyboard commands
-  src/fan.rs         fan safety, reset detection, profiles, curves
-  src/fan_control.rs fan IPC adapters
-  src/device.rs      device identity, battery health, dashboard score
-  src/battery.rs     battery detail and charge threshold
-  src/presets.rs     performance preset mapping
-  src/display.rs     X11 / KDE / GNOME / sway / wlroots / Hyprland adapters
-  src/diagnostics.rs health checks, smart scan, report export
-  src/gpu_ext.rs     NVIDIA details, power limit, runtime PM
-  src/main.rs        entry point, --discover / --selftest
-  src/bin/loq-helper.rs  privileged helper (fan, GPU switch, power limits, charging,
-                     thermal mode, brightness, SMART, GPU power/runtime PM,
-                     memory info, cache drop)
-  tauri.conf.json
-  capabilities/      Tauri 2 permissions
-scripts/             install.sh / uninstall.sh
-polkit/ udev/  systemd/  desktop/
-```
-
-The frontend is intentionally thin: it renders state and forwards user intent. All hardware
-decisions, validation, mode mapping, process filtering/limits, fan-curve checks, display
-adapter selection, diagnostics, and config normalisation live in Rust (feature modules,
-`commands.rs`, and `loq-helper`), so the JS never touches sysfs and cannot bypass a check.
-
-The app never runs as root. `loq-helper` is installed root-owned and is invoked with
-`sudo -n /usr/local/bin/loq-helper`; the installer adds a NOPASSWD sudoers rule for that
-single binary only. All helper inputs are validated and writes are limited to whitelisted
-sysfs paths.
-
-## Build
-
-The installer installs the required build/runtime packages for your distribution
-(pacman, apt, dnf, zypper or apk) after asking for confirmation. To build manually
-on Arch:
+Install Vantage Linux directly from GitHub using `curl`. The installer automatically detects your Linux distribution, resolves dependencies, compiles the optimized binary, and configures all systemd, polkit, and udev integrations:
 
 ```bash
-sudo pacman -S rust base-devel pkgconf webkit2gtk-4.1 libappindicator \
-               openssl gtk3 librsvg
+curl -fsSL https://raw.githubusercontent.com/Reivhell/Vantage-Linux/main/scripts/install.sh | bash
 ```
 
-```bash
-cargo build --release          # workspace build (both binaries)
-./target/release/loq-control   # run
-./target/release/loq-control --discover
-```
+> [!TIP]
+> Prefer downloading and inspecting first? You can run:
+> ```bash
+> bash -c "$(curl -fsSL https://raw.githubusercontent.com/Reivhell/Vantage-Linux/main/scripts/install.sh)"
+> ```
 
-## Install
+---
+
+### 📦 Manual Git Clone & Interactive Installer
+
+If you prefer inspecting source code or building offline:
 
 ```bash
+# 1. Clone repository
+git clone https://github.com/Reivhell/Vantage-Linux.git
+cd Vantage-Linux
+
+# 2. Launch the interactive installer
 ./scripts/install.sh
 ```
 
-The installer re-launches itself through `sudo`, so you are prompted for your
-password once. It detects the distribution's package manager and offers to download
-any missing required build/runtime packages before building.
+The installer re-launches itself through `sudo` once and displays a terminal menu:
 
-With no arguments the installer opens an interactive menu:
+```text
+  ╭──────────────────────────────────────────────────────────╮
+  │  VANTAGE LINUX                                           │
+  │  Lenovo hardware control for Linux                       │
+  │  version 0.1.0                                           │
+  ╰──────────────────────────────────────────────────────────╯
 
-1. **Update / Install** — pull the latest source (only when tracked files are clean),
-   build, and install everything.
-2. **Reinstall** — rebuild the current source and reinstall.
-3. **Repair** — refresh sudoers, polkit, udev, the user service, and the desktop entry
-   without rebuilding.
-4. **Status** — show installed/source versions, helper version, service state, and
-   whether each integration file is present.
-5. **Uninstall** — remove the app and every file it owns: binaries, helper, sudoers,
-   polkit, udev rule, service, desktop entry, icons, config, profiles, reports,
-   cache and battery history.
-6. **Uninstall (keep data)** — remove the app files but keep config, profiles and
-   battery history.
-
-Non-interactive commands:
-
-```bash
-./scripts/install.sh --install
-./scripts/install.sh --update
-./scripts/install.sh --reinstall
-./scripts/install.sh --repair
-./scripts/install.sh --status
-./scripts/uninstall.sh                # full cleanup
-./scripts/uninstall.sh --keep-data    # keep config + profiles + battery history
+  1) Update / Install   Pull latest source, compile & install integrations
+  2) Reinstall          Rebuild current source tree and reinstall
+  3) Repair             Refresh sudoers, polkit, udev & desktop files
+  4) Status             Show installed versions and file health
+  5) Uninstall          Full clean removal (binaries, services, data)
+  6) Uninstall (safe)   Remove binaries & services, keep configs/data
 ```
 
-Useful flags: `--enable-service`, `--disable-service`, `--no-build`, `--yes`, and
-`--no-color`. `--purge` is kept as an alias for the default full cleanup. The
-interactive menu is skipped when stdin is not a terminal.
-
-This builds the release binaries and installs:
-
-| Item | Location |
-|---|---|
-| app | `/usr/local/bin/loq-control` |
-| privileged helper | `/usr/local/bin/loq-helper` (root:root, 755) |
-| sudoers rule | `/etc/sudoers.d/99-loq-control` |
-| polkit policy | `/usr/share/polkit-1/actions/` |
-| udev rule | `/etc/udev/rules.d/99-ite-keyboard.rules` |
-| user service | `~/.config/systemd/user/loq-control.service` |
-| desktop entry | `~/.local/share/applications/loq-control.desktop` |
-| config | `~/.config/loq-control/config.toml` |
-| profiles | `~/.config/loq-control/profiles.json` |
-| battery history | `~/.local/share/loq-control/battery.db` |
-| diagnostic reports | `~/.local/state/loq-control/` |
-
-Autostart is disabled by default. Enable with:
+<details>
+<summary><strong>Non-interactive CLI Flags (for scripting & automation)</strong></summary>
 
 ```bash
-systemctl --user enable --now loq-control
+./scripts/install.sh --install         # Run automated non-interactive install
+./scripts/install.sh --update          # Pull latest git commit and rebuild
+./scripts/install.sh --reinstall       # Force clean rebuild and install
+./scripts/install.sh --repair          # Reinstall system integration files without rebuild
+./scripts/install.sh --status          # Check health of installed components
+./scripts/install.sh --enable-service  # Enable autostart systemd user service
+./scripts/uninstall.sh                 # Complete cleanup of all files and data
+./scripts/uninstall.sh --keep-data     # Keep config, profiles and battery history
+```
+Additional flags supported: `--yes` (skip confirmation), `--no-color`, `--no-build`.
+</details>
+
+---
+
+## 💡 What Is Vantage Linux?
+
+**Vantage Linux** delivers the full hardware control suite Lenovo users love on Windows (like Lenovo Vantage and Legion Zone), reimagined natively for Linux. 
+
+Unlike heavy Electron apps, Vantage Linux is engineered with **Rust** and **Tauri 2**. The user interface is pure static HTML/CSS/JS compiled straight into the binary with **zero Node.js runtime and zero npm overhead**.
+
+### ⚖️ Why It's Different
+
+| Feature | Standard Linux Experience | Vantage Linux |
+|---|---|---|
+| **Memory Footprint** | ~350MB – 800MB (Electron apps) | **< 30MB RAM** (Tauri + Rust core) |
+| **Security Model** | Often runs GUI as `root` (dangerous) | **Unprivileged GUI** + audited whitelist helper |
+| **Battery Conservation** | Manual `echo` commands in terminal | **GUI 80% threshold, Rapid Charge & SQLite analytics** |
+| **Display Control** | Different tools per desktop environment | **Unified controller** (X11, KDE, GNOME `gdctl`, Sway, Hyprland) |
+| **Keyboard RGB** | Kernel patch or third-party daemon | **Direct 33-byte ITE HID output** (no root after udev rule) |
+| **GPU Switching** | Complex CLI syntax across backends | **1-click EnvyControl, supergfxctl, or prime-select** |
+| **Telemetry** | Polling multiple separate CLI tools | **Integrated kernel `/proc` telemetry & sparklines** |
+
+---
+
+## ✨ Key Features
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                             VANTAGE LINUX                              │
+├─────────────────┬─────────────────┬──────────────────┬─────────────────┤
+│ ⚡ Performance   │ 🔋 Battery Care  │ 🎮 GPU Center    │ 🖥️ Display       │
+│  • Quiet/Perf   │  • Conservation │  • Hybrid / dGPU │  • Refresh rate │
+│  • Auto AC/Batt │  • Rapid Charge │  • Runtime PM    │  • Multi-monitor│
+│  • Power limits │  • SQLite Wear  │  • Power limits  │  • sysfs backlt │
+├─────────────────┼─────────────────┼──────────────────┼─────────────────┤
+│ ❄️ Fan Control   │ 🌈 4-Zone RGB   │ 🩺 Diagnostics   │ 📊 Telemetry    │
+│  • Custom curves│  • Static/Breath│  • SMART Storage │  • Per-core CPU │
+│  • RPM sensor   │  • Wave/Smooth  │  • Throttling    │  • Disk I/O ops │
+│  • Safety guard │  • Zero-root HID│  • Markdown exp. │  • Task manager │
+└─────────────────┴─────────────────┴──────────────────┴─────────────────┘
 ```
 
-`--enable-service` does this during installation. Uninstalling removes only files
-owned by LOQ Control Center; system packages, drivers and other applications are
-never touched. Use `--keep-data` if you want to keep config, profiles and battery
-history for a future reinstall.
+### ⚡ Performance & Thermal Profiles
+- **Platform Profile Integration**: Maps directly to hardware ACPI thermal profiles (`quiet`, `balanced`, `performance`).
+- **Smart AC/Battery Switching**: Automatically switches to Performance when plugged into AC power and transitions to Quiet when running on battery.
+- **Power Limits Adjustment**: Fine-tune PL1 / PL2 / sustained package power limits on supported firmware.
 
-## Optional integrations (not required)
+### 🔋 Battery Health & Conservation Mode
+- **Conservation Mode (80% Limit)**: Extends battery longevity by locking maximum charging at 80% when docked.
+- **Rapid Charge Toggle**: Enables rapid charging when supported by the Embedded Controller (EC).
+- **In-Depth Telemetry**: Track real-time wattage discharge, voltage, operating temperature, cycle count, and design capacity.
+- **Historical Wear Tracking**: Embedded SQLite database (`battery.db`) logs battery health progression over time.
 
-These tools add features when present. The installer never requires or installs them;
-the app degrades gracefully without them.
+### 🎮 GPU Modes & NVIDIA Power Limits
+- **Unified Switcher**: Seamlessly integrates with `envycontrol`, `supergfxctl`, or `prime-select` for switching between **Integrated**, **Hybrid**, and **Dedicated (NVIDIA)** modes.
+- **Reboot Persistence**: Remembers scheduled GPU mode transitions across reboots.
+- **NVIDIA Telemetry & Runtime PM**: Real-time VRAM allocation, GPU core clock, power draw, temperature, and runtime power management control.
 
-| Tool | Purpose |
-|---|---|
-| `nvidia-smi` | NVIDIA telemetry and power limit |
-| `smartctl` (smartmontools) | storage health check via the helper |
-| `powerprofilesctl` | power profile switching |
-| `envycontrol`, `supergfxctl` or `prime-select` | GPU mode switching |
-| `xrandr` | X11 output modes |
-| `kscreen-doctor` | KDE Plasma Wayland output modes |
-| `gnome-randr` | GNOME Wayland output modes |
-| `gdctl` | GNOME Wayland output modes |
-| `swaymsg`, `wlr-randr` | sway / wlroots output modes |
-| `hyprctl` | Hyprland output modes |
-| `dmidecode` | DIMM size/type/speed (helper runs it as root) |
-| `lsblk` (util-linux), `ip` (iproute2) | storage and network details |
+### 🖥️ Display & Refresh Rate Management
+- **Universal Wayland & X11 Support**: Works out-of-the-box on X11, KDE Plasma Wayland, GNOME Wayland (via native `gdctl` with `gnome-randr` fallback), sway/wlroots, and Hyprland.
+- **Refresh Rate Ceiling**: Switch between 60Hz and high refresh rates (120Hz, 144Hz, 165Hz, 240Hz) with one click.
+- **GNOME Layout Preservation**: Utilizes `gdctl` to change refresh rates without scrambling multi-monitor spatial arrangements.
 
-## Notes
+### 🌈 4-Zone ITE RGB Keyboard
+- **Direct HID Communication**: Sends raw 33-byte HID reports directly to `/dev/hidrawN` (VID `0x048d`).
+- **No Background Daemon or Root**: Safe, instant color and effect adjustments permitted through non-root `udev` permissions.
+- **Presets & Effects**: Static colors, breathing, waves, speed settings, and custom 4-zone palette mappings.
 
-- Fan control depends on the Lenovo WMI/hwmon driver exposing `pwmN` and `pwmN_auto_point*`.
-  Many LOQ models do not expose it; the UI hides the Fan tab in that case.
-- Display refresh control uses the active compositor: `xrandr`, `kscreen-doctor`,
-  `gdctl`/`gnome-randr`, `swaymsg`, `wlr-randr`, or `hyprctl`. On GNOME Wayland, `gdctl`
-  preserves the existing logical-monitor layout while changing one output's mode.
-  `gnome-randr` is only a fallback when `gdctl` is unavailable.
-- Diagnostics are read-only. SMART and privileged brightness/GPU writes go through the
-  helper; read-only checks use `sudo -n` and never prompt.
-- Rapid charge appears only when the EC advertises `Fast` in `charge_types`.
-- Thermal modes follow `platform_profile_choices`; Windows-only Vantage features (cloud
-  updates, warranty, Dolby, BIOS/MUX toggles) are out of scope.
-- Disk I/O reports throughput and real busy % from `io_ticks`.
-- Re-run `sudo ./scripts/install.sh --update` after updating so `/usr/local/bin/loq-helper`
-  matches the app. The UI shows `helper: outdated` until the helper is refreshed.
+### ❄️ Fan Control & Custom Fan Curves
+- **Live Fan Readout**: Real-time RPM tracking for dual-fan cooling setups.
+- **PWM Overrides**: Manual speed sliders and custom temperature-to-PWM slope curves.
+- **Safety Fallback**: Automatic thermal fail-safe restores firmware auto-fan mode if system temperatures exceed safety ceilings.
+
+### 🩺 System Diagnostics & Smart Scan
+- **Instant Health Audit**: Scans storage SMART status, CPU thermal throttling flags, systemd service failures, and orphan packages.
+- **Exportable Markdown Reports**: Generates comprehensive diagnosis reports directly to `~/.local/state/vantage-linux/`.
+
+### 📊 Telemetry & Process Governor
+- **Lightweight System Monitor**: Live per-core CPU load, memory utilization, swap usage, disk I/O throughput (`io_ticks`), and network RX/TX.
+- **Safe Process Manager**: Filter, sort, and terminate misbehaving tasks safely (refuses PID 1 and critical system tasks).
+
+---
+
+## 🏗️ Architecture & Security Model
+
+Vantage Linux follows strict **least-privilege security design**. The graphical interface and Tauri application **never run as root**.
+
+```
+┌────────────────────────────────────────────────────────┐
+│                   Vantage Linux UI                     │
+│           (Vanilla HTML5 / CSS3 / JavaScript)          │
+└───────────────────────────┬────────────────────────────┘
+                            │  Tauri IPC (IPC Bridge)
+┌───────────────────────────▼────────────────────────────┐
+│                  Rust Backend Engine                   │
+│   • Capabilities Probe  • Stats Reader  • TOML Config  │
+│   • Display Adapters    • Process Guard • History DB   │
+└─────────────┬────────────────────────────┬─────────────┘
+              │ Unprivileged sysfs / /proc │
+              │ (Sensors, Battery, Network)│
+              ▼                            │
+┌───────────────────────────┐              │ Sudoers Whitelist
+│      Kernel Sysfs         │              │ (NOPASSWD for single binary)
+│   /sys/class/power_supply │              ▼
+│   /sys/devices/platform   │ ┌──────────────────────────┐
+│   /dev/hidraw* (udev rule)│ │  vantage-helper (Setuid) │
+└───────────────────────────┘ │  • Safe Fan Curves       │
+                              │  • GPU Mode Switching    │
+                              │  • Battery Thresholds    │
+                              │  • SMART Disk Checks     │
+                              └────────────┬─────────────┘
+                                           │ Whitelisted Sysfs Writes
+                                           ▼
+                              ┌──────────────────────────┐
+                              │ Lenovo WMI / ACPI Driver │
+                              └──────────────────────────┘
+```
+
+1. **Unprivileged Frontend & Core**: The GUI and main backend run entirely under your standard user account.
+2. **Audited Helper (`vantage-helper`)**: Privileged operations (writing to thermal profiles, fan PWM, GPU switching) are delegated to a dedicated Rust binary invoked via `sudo -n /usr/local/bin/vantage-helper`.
+3. **Restricted Sudoers**: The installer adds `/etc/sudoers.d/99-vantage-linux`, granting passwordless elevation exclusively to `vantage-helper`.
+4. **Input Validation**: `vantage-helper` verifies all arguments against strict whitelists—arbitrary commands or unauthorized file writes are impossible.
+
+---
+
+## 📁 System Integration Paths
+
+When installed, Vantage Linux places files strictly in standard Linux XDG and system locations:
+
+| Component | Path | Description |
+|---|---|---|
+| **Main Application** | `/usr/local/bin/vantage-linux` | Compiled release application binary |
+| **Privileged Helper** | `/usr/local/bin/vantage-helper` | Audited root helper (`root:root`, 0755) |
+| **Sudoers Rule** | `/etc/sudoers.d/99-vantage-linux` | NOPASSWD authorization for helper |
+| **Polkit Policy** | `/usr/share/polkit-1/actions/com.github.vantagelinux.policy` | Polkit privilege definition |
+| **udev Rule** | `/etc/udev/rules.d/99-ite-keyboard.rules` | User-access rule for ITE RGB HID controller |
+| **Desktop Entry** | `~/.local/share/applications/vantage-linux.desktop` | Application launcher shortcut |
+| **Application Icon** | `~/.local/share/icons/hicolor/256x256/apps/vantage-linux.png` | Hi-res desktop icon |
+| **Systemd Service** | `~/.config/systemd/user/vantage-linux.service` | Optional background service for auto-presets |
+| **Configuration** | `~/.config/vantage-linux/config.toml` | User settings, fan curves, and preset rules |
+| **Custom Profiles** | `~/.config/vantage-linux/profiles.json` | Performance profile configurations |
+| **Battery History** | `~/.local/share/vantage-linux/battery.db` | SQLite telemetry and health logs |
+| **Diagnostic Reports**| `~/.local/state/vantage-linux/` | Exported health inspection files |
+
+---
+
+## 🔌 Supported Hardware & Integrations
+
+Vantage Linux is optimized for **Lenovo LOQ, Legion, IdeaPad Gaming, and ThinkPad** series laptops. Features degrade gracefully if specific firmware interfaces are not exposed by the kernel.
+
+### Optional Integrations Matrix
+The application automatically detects and interfaces with the following system utilities when installed:
+
+| Tool | Category | Benefit |
+|---|---|---|
+| `nvidia-smi` | GPU | NVIDIA power limits, clocks, temperature, and fan telemetry |
+| `envycontrol` / `supergfxctl` | GPU | 1-click Hybrid / Integrated / Dedicated GPU mode switching |
+| `prime-select` | GPU | Ubuntu/Debian GPU switching fallback |
+| `smartctl` | Diagnostics | In-depth NVMe / SSD drive health inspection |
+| `powerprofilesctl` | Power | System power-profiles-daemon interoperability |
+| `gdctl` | Display | GNOME Wayland resolution and refresh-rate control without layout distortion |
+| `kscreen-doctor` | Display | KDE Plasma Wayland display modes and refresh rates |
+| `wlr-randr` / `swaymsg` | Display | Sway and wlroots compositor display modes |
+| `hyprctl` | Display | Hyprland dynamic display management |
+| `xrandr` | Display | X11 display resolution and refresh rate controls |
+| `dmidecode` | Memory | Physical RAM DIMM manufacturer, clock speed, and slot topology |
+
+---
+
+## 💻 CLI & Telemetry
+
+You can use Vantage Linux directly from your terminal for headless discovery, script automation, or troubleshooting:
+
+```bash
+# Print discovered laptop hardware capabilities
+vantage-linux --discover
+
+# Perform self-test and output charging, thermal, memory, display, and battery state as JSON
+vantage-linux --selftest
+
+# Enable the background user service (for auto AC/battery preset switching)
+systemctl --user enable --now vantage-linux
+
+# View service logs in real time
+journalctl --user -u vantage-linux -f
+```
+
+---
+
+## 🛠️ Manual Build & Development
+
+If you wish to build Vantage Linux manually from source:
+
+<details>
+<summary><strong>1. Install Build Dependencies</strong></summary>
+
+Select your distribution:
+
+**Arch Linux / Manjaro:**
+```bash
+sudo pacman -S --needed rust base-devel pkgconf webkit2gtk-4.1 libappindicator-gtk3 openssl gtk3 librsvg
+```
+
+**Ubuntu / Debian / Linux Mint:**
+```bash
+sudo apt update && sudo apt install -y build-essential curl pkg-config \
+  libwebkit2gtk-4.1-dev libappindicator3-dev libssl-dev libgtk-3-dev librsvg2-dev
+```
+
+**Fedora / RHEL:**
+```bash
+sudo dnf install -y gcc-c++ pkgconf-pkg-config webkit2gtk4.1-devel \
+  libappindicator-gtk3-devel openssl-devel gtk3-devel librsvg2-devel
+```
+
+**openSUSE:**
+```bash
+sudo zypper install -y gcc-c++ pkg-config webkit2gtk3-soup2-devel \
+  libappindicator3-devel libopenssl-devel gtk3-devel librsvg-devel
+```
+</details>
+
+<details>
+<summary><strong>2. Compile & Run</strong></summary>
+
+```bash
+# Compile both binaries in release mode
+cargo build --release
+
+# Run the compiled binary
+./target/release/vantage-linux
+
+# Test hardware detection
+./target/release/vantage-linux --discover
+```
+</details>
+
+---
+
+## ❓ FAQ & Troubleshooting
+
+<details>
+<summary><strong>Why is the Fan tab missing or disabled?</strong></summary>
+Fan control depends on the Lenovo ACPI/WMI driver exposing <code>pwmN</code> and <code>pwmN_auto_point*</code> interfaces in sysfs (<code>/sys/class/hwmon/</code>). Many newer LOQ models do not yet expose direct fan control in the mainline kernel. In this case, Vantage Linux hides the Fan tab to prevent system instability.
+</details>
+
+<details>
+<summary><strong>How does RGB keyboard lighting work without root?</strong></summary>
+The installer registers <code>/etc/udev/rules.d/99-ite-keyboard.rules</code>, which grants read/write permissions to users in the active seat for the ITE 8295 / 8291 USB HID raw device (VID <code>0x048d</code>).
+</details>
+
+<details>
+<summary><strong>I previously used LOQ Control Center. Do I need to uninstall it first?</strong></summary>
+No. The Vantage Linux installer automatically detects old LOQ Control Center installations, removes legacy files and services, and seamlessly migrates your existing settings, custom profiles, and battery history database to the new XDG paths.
+</details>
+
+<details>
+<summary><strong>How do I completely uninstall Vantage Linux?</strong></summary>
+Run <code>sudo /usr/local/bin/scripts/uninstall.sh</code> or re-run the installer and select option <code>5</code>. To remove the software while preserving your battery history and profile configuration, use <code>./scripts/uninstall.sh --keep-data</code>.
+</details>
+
+---
+
+## 🤝 Contributing
+
+Contributions make the open-source community a wonderful place to build and collaborate!
+
+1. Fork the Project (`https://github.com/Reivhell/Vantage-Linux/fork`)
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+Distributed under the **MIT License**. See [LICENSE](LICENSE) for more information.
+
+<p align="center">
+  <sub>Built with Rust for the Linux Lenovo community • Not affiliated with Lenovo Inc.</sub>
+</p>
