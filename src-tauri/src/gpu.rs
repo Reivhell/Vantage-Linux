@@ -128,16 +128,16 @@ pub(crate) fn read_gpu_processes() -> Vec<GpuProcessInfo> {
         let out = String::from_utf8_lossy(&o.stdout);
         let mut procs = Vec::new();
         for line in out.lines().skip(2) {
-            // Format: # gpu pid sm  mem  enc dec  command
+            // Format: gpu pid sm mem enc dec command
             let fields: Vec<&str> = line.split_whitespace().collect();
-            if fields.len() >= 7 && fields[0].starts_with('#') {
-                let pid: Option<u32> = fields[2].parse().ok();
-                let mem: Option<u32> = fields[4].parse().ok();
+            if fields.len() >= 7 && !fields[0].starts_with('#') {
+                let pid: Option<u32> = fields[1].parse().ok();
+                let mem: Option<u32> = fields[3].parse().ok();
                 if let Some(pid) = pid {
                     procs.push(GpuProcessInfo {
                         pid,
                         name: fields[6..].join(" ").trim().to_string(),
-                        gpu_id: fields[1].to_string(),
+                        gpu_id: fields[0].to_string(),
                         memory_mb: mem,
                     });
                 }

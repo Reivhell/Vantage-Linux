@@ -72,7 +72,11 @@ export function initDevice() {
     $(id)?.addEventListener("change", async (e) => {
       const value = e.target.checked;
       const res = await run("cmd_set_device_setting", { key, value });
-      if (res) toast(`${label} ${value ? "diaktifkan" : "dinonaktifkan"}`);
+      if (!res) {
+        e.target.checked = !value;
+        return;
+      }
+      toast(`${label} ${value ? "diaktifkan" : "dinonaktifkan"}`);
     });
   };
 

@@ -953,7 +953,8 @@ fn read_diskstats_bytes() -> (u64, u64, u64) {
     let mut io_ticks = 0u64;
     for line in text.lines() {
         let fields: Vec<&str> = line.split_whitespace().collect();
-        if fields.len() < 10 {
+        // field 12 (io_ticks) requires at least 14 columns.
+        if fields.len() < 14 {
             continue;
         }
         let name = fields[2];

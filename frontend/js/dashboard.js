@@ -38,7 +38,9 @@ export async function loadDashboard() {
 
     if (dev) {
       const model = [dev.vendor, dev.product].filter(Boolean).join(" ") || "--";
-      if ($("sidebar-device-model")) $("sidebar-device-model").textContent = model;
+      const modelEl = $("sidebar-device-model");
+      if (modelEl) modelEl.textContent = model;
+      if ($("sidebar-conn-status")) $("sidebar-conn-status").textContent = "Backend aktif";
     }
 
     if (Array.isArray(presets)) {
@@ -52,12 +54,14 @@ export async function loadDashboard() {
     if (stats) updateDashboardStats(stats);
   } catch (err) {
     console.error("loadDashboard error:", err);
+    if ($("sidebar-conn-status")) $("sidebar-conn-status").textContent = "Backend tidak tersedia";
   }
 }
 
 export function updateDashboardStats(stats) {
   if (!stats) return;
   const view = stats.view || {};
+  const pct = (value) => (value === null || value === undefined ? "--" : `${Math.round(value)}%`);
 
   const cpu = Number(stats.cpu_percent) || 0;
   const gpuValue = stats.gpu_util === null || stats.gpu_util === undefined ? null : Number(stats.gpu_util);

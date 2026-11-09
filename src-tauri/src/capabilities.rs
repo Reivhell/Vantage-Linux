@@ -178,7 +178,7 @@ fn probe_power_profiles(caps: &mut Capabilities) {
     if Command::new("powerprofilesctl")
         .arg("list")
         .output()
-        .map_or(false, |o| o.status.success())
+        .is_ok_and(|o| o.status.success())
     {
         caps.power_profiles_available = true;
         caps.power_profiles_profiles = vec![
@@ -217,7 +217,7 @@ fn probe_battery_conservation(caps: &mut Capabilities) {
 fn probe_nvidia(caps: &mut Capabilities) {
     if !Command::new("nvidia-smi")
         .output()
-        .map_or(false, |o| o.status.success())
+        .is_ok_and(|o| o.status.success())
     {
         return;
     }
@@ -235,7 +235,7 @@ fn probe_intel_gpu(caps: &mut Capabilities) {
     if Command::new("intel_gpu_top")
         .arg("--version")
         .output()
-        .map_or(false, |o| o.status.success())
+        .is_ok_and(|o| o.status.success())
     {
         caps.intel_gpu_available = true;
         return;

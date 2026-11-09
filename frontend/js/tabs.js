@@ -9,6 +9,7 @@ const screenTitles = {
   gpu: { title: "Pengaturan GPU", sub: "Kelola penggunaan GPU Intel dan NVIDIA." },
   resource: { title: "Manajemen Sumber Daya", sub: "Pantau dan atur batas CPU/GPU secara otomatis." },
   memory: { title: "RAM & Tasks", sub: "Pantau memori fisik dan proses yang berjalan." },
+  automation: { title: "Otomatisasi Sumber Daya", sub: "Aturan tertutup dengan audit lokal." },
   fan: { title: "Kontrol Kipas", sub: "Atur kecepatan kipas sesuai kebutuhan Anda." },
   device: { title: "Pengaturan Perangkat", sub: "Kelola fitur perangkat keras laptop Anda." },
   diagnostics: { title: "Diagnostik & Pemindaian", sub: "Periksa kesehatan sistem dan perangkat Anda." },

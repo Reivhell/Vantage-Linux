@@ -7,6 +7,17 @@ pub struct SimpleResult {
     pub message: String,
 }
 
+impl SimpleResult {
+    /// Bangun respons gagal dari error terstruktur agar kode/title tetap konsisten.
+    pub(crate) fn from_app_error(err: crate::error::AppError) -> Self {
+        let envelope = crate::error::ErrorEnvelope::from(err);
+        Self {
+            ok: false,
+            message: envelope.message,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessInfo {
     pub pid: i32,

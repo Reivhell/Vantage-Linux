@@ -23,8 +23,9 @@ pub use power::{
     get_available_profiles, get_battery_conservation, get_charge_mode, get_thermal_mode,
     ChargeModeInfo, PowerLimitAttr, SetLimitCmd, ThermalModeInfo,
 };
+pub(crate) use stats::collect_stats_raw;
+pub(crate) use stats::read_cpu_temp;
 pub use stats::{collect_stats, SystemStats};
-pub(crate) use stats::{collect_stats_raw, read_cpu_temp};
 pub use types::{ProcessInfo, SimpleResult};
 
 mod battery;
@@ -35,6 +36,7 @@ mod db;
 mod device;
 mod diagnostics;
 mod display;
+mod error;
 mod fan_control;
 mod gpu;
 mod gpu_ext;
@@ -52,6 +54,17 @@ mod types;
 static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
 static LAST_BATTERY_SAMPLE: Mutex<f64> = Mutex::new(0.0);
 pub(crate) static REFRESH_MS: AtomicU64 = AtomicU64::new(1000);
+
+/// Sesi pengisian yang sedang berjalan, dicatat saat kabel dilepas.
+struct ChargeSession {
+    start_pct: f64,
+    started_at: f64,
+    last_pct: f64,
+    energy_full_wh: Option<f64>,
+}
+
+static CHARGE_SESSION: Mutex<Option<ChargeSession>> = Mutex::new(None);
+static LAST_PLUGGED: Mutex<Option<bool>> = Mutex::new(None);
 
 pub struct AppState {
     pub caps: RwLock<Capabilities>,
@@ -101,7 +114,73 @@ pub fn preset_info() -> Vec<presets::PresetInfo> {
 // Background monitor loop (emits stats events to frontend)
 // ---------------------------------------------------------------------------
 
-fn monitor_loop(handle: tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+/// Hitung ringkasan sesi pengisian. `None` bila tidak ada kenaikan berarti.
+fn charge_event_amounts(
+    session: &ChargeSession,
+    end_pct: f64,
+    end_ts: f64,
+) -> Option<(f64, f64, f64, f64)> {
+    let delta = end_pct - session.start_pct;
+    let duration_min = (end_ts - session.started_at) / 60.0;
+    if delta <= 0.5 || duration_min <= 0.0 {
+        return None;
+    }
+    let energy_wh = session
+        .energy_full_wh
+        .map(|wh| wh * delta / 100.0)
+        .unwrap_or(0.0);
+    let rate_w = energy_wh / (duration_min / 60.0);
+    Some((end_pct, duration_min, energy_wh, rate_w))
+}
+
+/// Rekam sesi pengisian dari transisi colokan: mulai saat AC tersambung,
+/// selesai saat AC dilepas (dan persentase benar-benar naik).
+fn track_charge_session(stats: &SystemStats) {
+    let Some(plugged) = stats.power_plugged else {
+        return;
+    };
+    let pct = stats.battery_percent.map(|v| v as f64);
+    let prev = {
+        let mut last = LAST_PLUGGED.lock().unwrap();
+        let prev = *last;
+        *last = Some(plugged);
+        prev
+    };
+    let mut session = CHARGE_SESSION.lock().unwrap();
+
+    if plugged {
+        if prev != Some(true) {
+            if let Some(p) = pct {
+                *session = Some(ChargeSession {
+                    start_pct: p,
+                    started_at: stats.timestamp,
+                    last_pct: p,
+                    energy_full_wh: battery::read_battery_detail().energy_full_wh,
+                });
+            }
+        } else if let Some(s) = session.as_mut() {
+            if let Some(p) = pct {
+                s.last_pct = p;
+            }
+        }
+        return;
+    }
+
+    let Some(s) = session.take() else {
+        return;
+    };
+    let end_pct = pct.unwrap_or(s.last_pct);
+    if let Some((end_pct, duration_min, energy_wh, rate_w)) =
+        charge_event_amounts(&s, end_pct, stats.timestamp)
+    {
+        let _ = db::record_charge_event(s.start_pct, end_pct, duration_min, energy_wh, rate_w);
+    }
+}
+
+fn monitor_loop(
+    handle: tauri::AppHandle,
+    governor: Arc<ResourceGovernor>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let _ = APP_HANDLE.set(handle.clone());
     loop {
         // Tidak ada yang membaca event saat window disembunyikan ke tray.
@@ -114,6 +193,11 @@ fn monitor_loop(handle: tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         } else {
             collect_stats_raw()
         };
+        // Satu sumber telemetri: governor membaca snapshot yang sama dengan UI,
+        // sehingga aturan tidak memicu polling nvidia-smi/proc tambahan.
+        governor.ingest(&stats);
+        governor.evaluate();
+        track_charge_session(&stats);
         if visible {
             let _ = handle.emit("vantage:stats", &stats);
         }
@@ -153,6 +237,8 @@ fn monitor_loop(handle: tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         }
 
         // Deteksi reset firmware pada kipas setiap siklus monitoring.
+        fan_control::fan_check_reset(1, stats.fan1_rpm);
+        fan_control::fan_check_reset(2, stats.fan2_rpm);
 
         if let Some(plugged) = stats.power_plugged {
             if note_power_state(plugged) {
@@ -203,23 +289,15 @@ pub fn run() {
     let rules = ResourceGovernor::load_rules();
     let (governor, executor) = ResourceGovernor::new(rules);
     let governor = Arc::new(governor);
+    let monitor_governor = governor.clone();
 
-    let g = governor.clone();
-    rt.spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(1));
-        loop {
-            interval.tick().await;
-            g.tick();
-            g.evaluate();
-        }
-    });
     rt.spawn(executor.run());
 
     Builder::default()
         .manage(AppState {
             caps: RwLock::new(discover()),
             config: RwLock::new(load_config()),
-            fan_failsafe: FanFailSafe::default(),
+            fan_failsafe: FanFailSafe,
             governor,
             rt,
         })
@@ -231,12 +309,14 @@ pub fn run() {
             // Inisialisasi connection pool global untuk baterai (tidak fatal jika gagal).
             if let Err(e) = db::init_pool() {
                 warn!("failed to init db pool: {e}");
+            } else if let Err(e) = db::prune_all(90.0 * 86_400.0, 30.0 * 86_400.0) {
+                warn!("failed to prune local history: {e}");
             }
             // Inisialisasi penyimpan histori metrik untuk grafik (simpan 24 jam = 86400 detik).
             history::init_history(86400.0);
             let handle = app.handle().clone();
             std::thread::spawn(move || {
-                if let Err(e) = monitor_loop(handle) {
+                if let Err(e) = monitor_loop(handle, monitor_governor) {
                     warn!("monitor loop ended: {e}");
                 }
             });
@@ -322,10 +402,38 @@ pub fn run() {
             commands::cmd_set_device_setting,
             commands::cmd_get_resource_status,
             commands::cmd_list_rules,
+            commands::cmd_validate_rule,
             commands::cmd_add_rule,
+            commands::cmd_update_rule,
             commands::cmd_delete_rule,
             commands::cmd_toggle_rule,
+            commands::cmd_get_automation_events,
+            commands::cmd_clear_automation_events,
+            commands::cmd_clear_local_history,
+            commands::cmd_get_app_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Vantage Linux");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn charge_event_only_when_percentage_rises() {
+        let session = ChargeSession {
+            start_pct: 40.0,
+            started_at: 1000.0,
+            last_pct: 40.0,
+            energy_full_wh: Some(50.0),
+        };
+        let (end, duration, energy, rate) =
+            charge_event_amounts(&session, 60.0, 1000.0 + 30.0 * 60.0).unwrap();
+        assert_eq!(end, 60.0);
+        assert_eq!(duration, 30.0);
+        assert!((energy - 10.0).abs() < f64::EPSILON);
+        assert!((rate - 20.0).abs() < f64::EPSILON);
+        assert!(charge_event_amounts(&session, 40.0, 2000.0).is_none());
+    }
 }

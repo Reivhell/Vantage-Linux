@@ -121,6 +121,10 @@ fn main() {
             Some(percent) => charge_threshold(percent),
             None => usage("charge-threshold <50-100>"),
         },
+        "device-setting" => match (args.get(2), args.get(3)) {
+            (Some(key), Some(val)) => device_setting(key, val),
+            _ => usage("device-setting <key> <0|1>"),
+        },
         "brightness" => match (args.get(2), args.get(3)) {
             (Some(device), Some(percent)) => brightness(device, percent),
             _ => usage("brightness <device> <0-100>"),
@@ -245,6 +249,18 @@ fn fan_curve(fan_id_raw: &str, json: &str) -> i32 {
                 "ERROR: curve node {i} not found at {} (unsupported hardware).",
                 hwmon.display()
             );
+            return 1;
+        }
+    }
+    // Curves must rise monotonically; duplicate temps are ambiguous.
+    // Validate before enabling manual mode so a bad curve cannot leave the fan stuck.
+    for pair in parsed.windows(2) {
+        if pair[0].0 == pair[1].0 {
+            eprintln!("ERROR: curve temperatures must be unique.");
+            return 1;
+        }
+        if pair[1].1 < pair[0].1 {
+            eprintln!("ERROR: fan speed must not decrease as temperature rises.");
             return 1;
         }
     }
@@ -499,6 +515,38 @@ fn find_power_limit_path(attr: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+fn device_setting(key: &str, value: &str) -> i32 {
+    if value != "0" && value != "1" {
+        eprintln!("ERROR: value must be 0 or 1.");
+        return 1;
+    }
+    let file = match key {
+        "camera" => "camera_power",
+        "fn_lock" => "fn_lock",
+        "usb_charging" => "usb_charging",
+        "touchpad" => "touchpad",
+        _ => {
+            eprintln!("ERROR: '{key}' is not a firmware-backed setting.");
+            return 1;
+        }
+    };
+    let path = Path::new("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00").join(file);
+    if !path.exists() {
+        eprintln!("ERROR: {} not exposed by this firmware.", path.display());
+        return 1;
+    }
+    match write_sysfs(&path, value) {
+        Ok(()) => {
+            println!("{key} set to {value}.");
+            0
+        }
+        Err(e) => {
+            eprintln!("ERROR: {e}");
+            1
+        }
+    }
 }
 
 fn charge_type(mode: &str) -> i32 {
@@ -848,6 +896,20 @@ fn power_limit(attr: &str, value_raw: &str) -> i32 {
             return 1;
         }
     };
+    // Firmware-attributes expose min_value/max_value next to current_value.
+    // Enforce them so an in-range-looking value is not rejected by the kernel.
+    let parent = path.parent();
+    let read_bound = |name: &str| {
+        parent
+            .and_then(|p| fs::read_to_string(p.join(name)).ok())
+            .and_then(|v| v.trim().parse::<i64>().ok())
+    };
+    if let (Some(min), Some(max)) = (read_bound("min_value"), read_bound("max_value")) {
+        if value < min || value > max {
+            eprintln!("ERROR: value must be between {min} and {max} for '{attr}'.");
+            return 1;
+        }
+    }
     match write_sysfs(&path, &value.to_string()) {
         Ok(()) => {
             println!("Power limit '{attr}' set to {value}.");

@@ -2,6 +2,7 @@
 import { updateDashboardStats } from "./dashboard.js";
 import { updateThermalGauges } from "./thermal.js";
 import { updateFanLive } from "./fan.js";
+import { updateAutomationLive } from "./automation.js";
 
 let latestStats = null;
 
@@ -19,4 +20,5 @@ export function handleIncomingStats(stats) {
   if (document.getElementById("tab-fan")?.classList.contains("active")) {
     updateFanLive(stats);
   }
+  updateAutomationLive(stats);
 }

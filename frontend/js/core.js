@@ -4,16 +4,15 @@ const T = window.__TAURI__;
 export const hasTauri = Boolean(T && T.core && T.core.invoke);
 
 export const invoke = async (cmd, args = {}) => {
-  if (hasTauri) {
-    try {
-      return await T.core.invoke(cmd, args);
-    } catch (e) {
-      console.warn(`[Tauri] ${cmd} error:`, e);
-      throw e;
-    }
+  if (!hasTauri) {
+    throw new Error("Backend Vantage tidak tersedia. Jalankan aplikasi desktop untuk mengakses data perangkat.");
   }
-  // Mock data fallback only for browser preview mode
-  return mockInvoke(cmd, args);
+  try {
+    return await T.core.invoke(cmd, args);
+  } catch (e) {
+    console.warn(`[Tauri] ${cmd} error:`, e);
+    throw e;
+  }
 };
 
 export const listen = (event, callback) => {
@@ -149,7 +148,7 @@ export async function run(cmd, args, okMessage) {
     if (okMessage) toast(okMessage);
     return res;
   } catch (e) {
-    toast(String(e), true);
+    toast(e?.message || String(e), true);
     return null;
   }
 }

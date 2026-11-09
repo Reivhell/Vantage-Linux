@@ -2,6 +2,8 @@
 import { $, invoke, run, toast } from "./core.js";
 
 let fanInfo = null;
+let currentFanCurve = [];
+let defaultFanCurve = [];
 
 function setRing(id, rpm, available) {
   const ring = $(id);
@@ -49,13 +51,47 @@ export async function loadFan() {
     fanInfo = info;
     paintRpm(stats);
     paintMode(status);
+
+    if (info && info.default_curve && info.default_curve.length) {
+      defaultFanCurve = info.default_curve.map((p) => ({ ...p }));
+      currentFanCurve = defaultFanCurve.map((p) => ({ ...p }));
+    }
+
+    renderFanCurveChart();
   } catch (err) {
     console.error("loadFan error:", err);
+    toast(String(err), true);
   }
 }
 
 export function updateFanLive(stats) {
   paintRpm(stats);
+}
+
+function renderFanCurveChart() {
+  const line = $("fan-curve-line");
+  const svg = $("fan-curve-editor-svg");
+  if (!line || !svg) return;
+
+  // Chart range: X [45 (0°C) to 450 (100°C)], Y [130 (0%) to 25 (100%)]
+  const points = currentFanCurve.map((pt) => {
+    const x = 45 + (Math.min(100, Math.max(0, pt.temp)) / 100) * 405;
+    const y = 130 - (Math.min(100, Math.max(0, pt.pwm)) / 100) * 105;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+
+  line.setAttribute("points", points.join(" "));
+
+  // Update control point circles
+  const circles = svg.querySelectorAll("circle.curve-pt");
+  currentFanCurve.forEach((pt, i) => {
+    if (circles[i]) {
+      const x = 45 + (Math.min(100, Math.max(0, pt.temp)) / 100) * 405;
+      const y = 130 - (Math.min(100, Math.max(0, pt.pwm)) / 100) * 105;
+      circles[i].setAttribute("cx", x);
+      circles[i].setAttribute("cy", y);
+    }
+  });
 }
 
 export function initFan() {
@@ -72,5 +108,59 @@ export function initFan() {
         await loadFan();
       }
     });
+  });
+
+  // Curve points interactivity (drag or click adjustments)
+  const svg = $("fan-curve-editor-svg");
+  if (svg) {
+    let activeDragIdx = -1;
+
+    svg.querySelectorAll("circle.curve-pt").forEach((circle, idx) => {
+      circle.addEventListener("mousedown", (e) => {
+        activeDragIdx = idx;
+        e.preventDefault();
+      });
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (activeDragIdx < 0) return;
+      const rect = svg.getBoundingClientRect();
+      const mouseY = e.clientY - rect.top;
+      // Invert Y mapping to PWM percentage
+      const pwmPct = Math.round(Math.max(0, Math.min(100, (1 - (mouseY - 25) / 105) * 100)));
+      if (currentFanCurve[activeDragIdx]) {
+        currentFanCurve[activeDragIdx].pwm = pwmPct;
+        renderFanCurveChart();
+      }
+    });
+
+    window.addEventListener("mouseup", () => {
+      activeDragIdx = -1;
+    });
+  }
+
+  // Reset to default
+  $("btn-fan-reset")?.addEventListener("click", () => {
+    if (!defaultFanCurve.length) {
+      toast("Kurva bawaan tidak tersedia dari backend.", true);
+      return;
+    }
+    currentFanCurve = defaultFanCurve.map((p) => ({ ...p }));
+    renderFanCurveChart();
+    toast("Kurva kipas dikembalikan ke bawaan.");
+  });
+
+  // Apply curve to both fans; a partial failure is reported and leaves the UI honest.
+  $("btn-fan-apply")?.addEventListener("click", async () => {
+    if (currentFanCurve.length < 2) {
+      toast("Kurva belum dimuat dari backend.", true);
+      return;
+    }
+    for (const fanId of [1, 2]) {
+      const cmd = { fan_id: fanId, points: currentFanCurve };
+      const res = await run("cmd_apply_fan_curve", { cmd });
+      if (!res) return;
+    }
+    toast("Kurva kipas kustom diterapkan ke kedua kipas.");
   });
 }
