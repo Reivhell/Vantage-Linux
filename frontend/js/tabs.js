@@ -7,6 +7,7 @@ const screenTitles = {
   battery: { title: "Battery", sub: "Pantau kesehatan baterai dan pengisiannya." },
   thermal: { title: "System Temperature", sub: "Pantau suhu komponen laptop Anda secara real-time." },
   gpu: { title: "Pengaturan GPU", sub: "Kelola penggunaan GPU Intel dan NVIDIA." },
+  automation: { title: "Otomatisasi Sumber Daya", sub: "Aturan tertutup dengan audit lokal." },
   fan: { title: "Kontrol Kipas", sub: "Atur kecepatan kipas sesuai kebutuhan Anda." },
   device: { title: "Pengaturan Perangkat", sub: "Kelola fitur perangkat keras laptop Anda." },
   diagnostics: { title: "Diagnostik & Pemindaian", sub: "Periksa kesehatan sistem dan perangkat Anda." },

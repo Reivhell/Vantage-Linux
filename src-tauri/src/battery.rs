@@ -153,16 +153,18 @@ pub fn read_battery_detail() -> BatteryDetail {
 
 pub fn set_charge_threshold(percent: u32) -> crate::SimpleResult {
     if !(50..=100).contains(&percent) {
-        return crate::SimpleResult {
-            ok: false,
-            message: "threshold must be 50-100".into(),
-        };
+        return crate::SimpleResult::from_app_error(crate::error::AppError::LimitExceeded {
+            metric: "charge threshold".into(),
+            value: percent as f64,
+            limit: 100.0,
+        });
     }
     if first_file("charge_control_end_threshold").is_none() {
-        return crate::SimpleResult {
-            ok: false,
-            message: "firmware does not expose a charge threshold".into(),
-        };
+        return crate::SimpleResult::from_app_error(
+            crate::error::AppError::HardwareUnsupported {
+                feature: "charge threshold".into(),
+            },
+        );
     }
     crate::run_helper("charge-threshold", &[&percent.to_string()])
 }

@@ -84,10 +84,20 @@ fn run_helper_inner(subcmd: &str, args: &[&str], allow_pkexec: bool) -> SimpleRe
             backoff *= 2;
         }
     }
-    SimpleResult {
-        ok: false,
-        message: last_message,
-    }
+    let lower = last_message.to_lowercase();
+    let err = if lower.contains("permission")
+        || lower.contains("password")
+        || lower.contains("not authorized")
+    {
+        crate::error::AppError::Permission {
+            op: subcmd.to_string(),
+        }
+    } else {
+        crate::error::AppError::Other {
+            message: last_message,
+        }
+    };
+    SimpleResult::from_app_error(err)
 }
 
 fn powerprofilesctl(args: &[&str]) -> SimpleResult {
@@ -477,19 +487,33 @@ pub(crate) fn find_attr_path(attr_name: &str) -> Option<PathBuf> {
 }
 
 fn glob_simple(pattern: &str) -> Result<Vec<PathBuf>, ()> {
-    if let Some((pre, post)) = pattern.split_once('*') {
-        let pre_path = Path::new(pre.trim_end_matches('/'));
-        let post = post.trim_start_matches('/');
-        let mut out = Vec::new();
-        if let Ok(entries) = fs::read_dir(pre_path) {
-            for entry in entries.flatten() {
-                out.push(entry.path().join(post));
+    // Expand '*' per path segment so patterns like /sys/bus/wmi/drivers/x/*/* work.
+    let mut current = vec![PathBuf::from("/")];
+    for segment in pattern.split('/').filter(|s| !s.is_empty()) {
+        let mut next = Vec::new();
+        for base in &current {
+            if let Some(prefix) = segment.strip_suffix('*') {
+                if let Ok(entries) = fs::read_dir(base) {
+                    for entry in entries.flatten() {
+                        if entry
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with(prefix)
+                        {
+                            next.push(entry.path());
+                        }
+                    }
+                }
+            } else {
+                let candidate = base.join(segment);
+                if candidate.exists() {
+                    next.push(candidate);
+                }
             }
         }
-        Ok(out)
-    } else {
-        Ok(vec![PathBuf::from(pattern)])
+        current = next;
     }
+    Ok(current)
 }
 
 pub(crate) fn note_power_state(plugged: bool) -> bool {

@@ -3,7 +3,9 @@ use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use crate::resource_types::AutomationEvent;
 
 /// Lokasi database SQLite lokal (XDG-compliant: ~/.local/share/loq-control/battery.db).
 fn db_path() -> PathBuf {
@@ -31,6 +33,7 @@ impl DbPool {
         let path = db_path();
         ensure_parent(&path)?;
         let conn = Connection::open(&path).map_err(|e| e.to_string())?;
+        configure_conn(&conn)?;
         init_schema(&conn)?;
         Ok(Arc::new(Self {
             conn: Mutex::new(conn),
@@ -41,6 +44,7 @@ impl DbPool {
         self.conn.lock()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn record_sample(
         &self,
         percent: Option<f64>,
@@ -81,7 +85,10 @@ impl DbPool {
         get_rate_inner(&conn, window_seconds)
     }
 
-    pub fn check_capacity_drop(&self, threshold_pct: f64) -> Result<Option<(f64, f64, f64)>, String> {
+    pub fn check_capacity_drop(
+        &self,
+        threshold_pct: f64,
+    ) -> Result<Option<(f64, f64, f64)>, String> {
         let conn = self.lock().map_err(|e| e.to_string())?;
         check_capacity_drop_inner(&conn, threshold_pct)
     }
@@ -103,23 +110,13 @@ impl DbPool {
         rate_w: f64,
     ) -> Result<(), String> {
         let conn = self.lock().map_err(|e| e.to_string())?;
-        record_charge_event_inner(
-            &conn,
-            start_pct,
-            end_pct,
-            duration_min,
-            energy_wh,
-            rate_w,
-        )
+        record_charge_event_inner(&conn, start_pct, end_pct, duration_min, energy_wh, rate_w)
     }
 
     /// Buang sample lebih lama dari `retention_seconds` lalu VACUUM.
     pub fn prune_retention(&self, retention_seconds: f64) -> Result<(), String> {
         let conn = self.lock().map_err(|e| e.to_string())?;
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs_f64();
+        let now = now_secs();
         let cutoff = now - retention_seconds;
         conn.execute(
             "DELETE FROM battery_samples WHERE timestamp < ?1",
@@ -129,12 +126,82 @@ impl DbPool {
         conn.execute_batch("VACUUM").map_err(|e| e.to_string())?;
         Ok(())
     }
+
+    /// Catat satu eksekusi aksi otomatisasi ke audit log lokal.
+    pub fn record_automation_event(
+        &self,
+        rule_id: &str,
+        rule_name: &str,
+        action: &str,
+        status: &str,
+        detail: &str,
+    ) -> Result<(), String> {
+        let conn = self.lock().map_err(|e| e.to_string())?;
+        record_automation_event_inner(&conn, rule_id, rule_name, action, status, detail)
+    }
+
+    /// Ambil audit terbaru (maksimal `limit`).
+    pub fn recent_automation_events(&self, limit: usize) -> Result<Vec<AutomationEvent>, String> {
+        let conn = self.lock().map_err(|e| e.to_string())?;
+        recent_automation_events_inner(&conn, limit)
+    }
+
+    pub fn clear_automation_events(&self) -> Result<usize, String> {
+        let conn = self.lock().map_err(|e| e.to_string())?;
+        conn.execute("DELETE FROM automation_events", [])
+            .map_err(|e| e.to_string())
+    }
+
+    /// Hapus seluruh riwayat lokal (baterai, event pengisian, audit otomatisasi).
+    pub fn clear_local_history(&self) -> Result<(), String> {
+        let conn = self.lock().map_err(|e| e.to_string())?;
+        conn.execute_batch(
+            "DELETE FROM battery_samples;
+             DELETE FROM charge_events;
+             DELETE FROM automation_events;
+             VACUUM;",
+        )
+        .map_err(|e| e.to_string())
+    }
+
+    /// Hapus audit lebih lama dari `retention_seconds`.
+    pub fn prune_automation_events(&self, retention_seconds: f64) -> Result<usize, String> {
+        let conn = self.lock().map_err(|e| e.to_string())?;
+        let cutoff = now_secs() - retention_seconds;
+        conn.execute(
+            "DELETE FROM automation_events WHERE timestamp < ?1",
+            params![cutoff],
+        )
+        .map_err(|e| e.to_string())
+    }
 }
 
 pub fn open_conn() -> Result<Connection, String> {
     let path = db_path();
     ensure_parent(&path)?;
-    Connection::open(&path).map_err(|e| e.to_string())
+    let conn = Connection::open(&path).map_err(|e| e.to_string())?;
+    configure_conn(&conn)?;
+    Ok(conn)
+}
+
+/// PRAGMA produksi: WAL untuk pembacaan UI tanpa memblokir monitor loop,
+/// busy_timeout agar penulisan bersamaan menunggu alih-alih gagal.
+fn configure_conn(conn: &Connection) -> Result<(), String> {
+    conn.busy_timeout(Duration::from_secs(5))
+        .map_err(|e| e.to_string())?;
+    conn.execute_batch(
+        "PRAGMA journal_mode=WAL;
+         PRAGMA synchronous=NORMAL;
+         PRAGMA foreign_keys=ON;",
+    )
+    .map_err(|e| e.to_string())
+}
+
+fn now_secs() -> f64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs_f64()
 }
 
 pub fn init_schema(conn: &Connection) -> Result<(), String> {
@@ -164,6 +231,18 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
             rate_w REAL
         );
         CREATE INDEX IF NOT EXISTS idx_charge_events_ts ON charge_events(timestamp);
+
+        CREATE TABLE IF NOT EXISTS automation_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp REAL NOT NULL,
+            rule_id TEXT NOT NULL,
+            rule_name TEXT NOT NULL,
+            action TEXT NOT NULL,
+            status TEXT NOT NULL,
+            detail TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_automation_events_ts
+            ON automation_events(timestamp DESC);
         "#,
     )
     .map_err(|e| e.to_string())
@@ -187,6 +266,7 @@ fn pool() -> Result<Arc<DbPool>, String> {
 
 /// Free-function wrappers (menggunakan pool global) untuk kompatibilitas dengan
 /// command dan monitor loop yang tidak memegang AppState.
+#[allow(clippy::too_many_arguments)]
 pub fn record_sample(
     percent: Option<f64>,
     health_pct: Option<f64>,
@@ -198,7 +278,14 @@ pub fn record_sample(
     plugged: Option<bool>,
 ) -> Result<(), String> {
     pool()?.record_sample(
-        percent, health_pct, cycles, energy_full_wh, energy_design_wh, power_w, status, plugged,
+        percent,
+        health_pct,
+        cycles,
+        energy_full_wh,
+        energy_design_wh,
+        power_w,
+        status,
+        plugged,
     )
 }
 
@@ -214,9 +301,7 @@ pub fn get_rate(window_seconds: f64) -> Result<Option<f64>, String> {
     pool()?.get_rate(window_seconds)
 }
 
-pub fn check_capacity_drop(
-    threshold_pct: f64,
-) -> Result<Option<(f64, f64, f64)>, String> {
+pub fn check_capacity_drop(threshold_pct: f64) -> Result<Option<(f64, f64, f64)>, String> {
     pool()?.check_capacity_drop(threshold_pct)
 }
 
@@ -224,12 +309,54 @@ pub fn export_csv(path: &Path) -> Result<String, String> {
     pool()?.export_csv(path)
 }
 
+/// Catat satu sesi pengisian baterai memakai pool global.
+pub fn record_charge_event(
+    start_pct: f64,
+    end_pct: f64,
+    duration_min: f64,
+    energy_wh: f64,
+    rate_w: f64,
+) -> Result<(), String> {
+    pool()?.record_charge_event(start_pct, end_pct, duration_min, energy_wh, rate_w)
+}
+
 pub fn init_db() -> Result<(), String> {
     let conn = open_conn()?;
     init_schema(&conn)
 }
 
-/// --- Internal helpers (beroperasi pada &Connection, mudah diuji dengan in-memory DB) ---
+/// Catat audit eksekusi aksi otomatisasi memakai pool global.
+pub fn record_automation_event(
+    rule_id: &str,
+    rule_name: &str,
+    action: &str,
+    status: &str,
+    detail: &str,
+) -> Result<(), String> {
+    pool()?.record_automation_event(rule_id, rule_name, action, status, detail)
+}
+
+pub fn recent_automation_events(limit: usize) -> Result<Vec<AutomationEvent>, String> {
+    pool()?.recent_automation_events(limit)
+}
+
+pub fn clear_automation_events() -> Result<usize, String> {
+    pool()?.clear_automation_events()
+}
+
+pub fn clear_local_history() -> Result<(), String> {
+    pool()?.clear_local_history()
+}
+
+/// Pembersihan retensi dijalankan sekali saat startup.
+pub fn prune_all(battery_retention: f64, event_retention: f64) -> Result<(), String> {
+    let pool = pool()?;
+    pool.prune_retention(battery_retention)?;
+    pool.prune_automation_events(event_retention)?;
+    Ok(())
+}
+
+// --- Internal helpers (beroperasi pada &Connection, mudah diuji dengan in-memory DB) ---
 
 #[allow(clippy::too_many_arguments)]
 fn record_sample_inner(
@@ -380,7 +507,6 @@ fn get_rate_inner(conn: &Connection, window_seconds: f64) -> Result<Option<f64>,
     Ok(last.1)
 }
 
-#[allow(dead_code)]
 fn record_charge_event_inner(
     conn: &Connection,
     start_pct: f64,
@@ -444,6 +570,88 @@ pub fn export_csv_inner(conn: &Connection, _path: &Path) -> Result<String, Strin
             status.unwrap_or_default(),
             plugged.map(|p| p.to_string()).unwrap_or_default(),
         ));
+    }
+
+    // Sesi pengisian disimpan di tabel terpisah; sertakan sebagai bagian kedua
+    // dengan header sendiri agar tetap terbaca tanpa mencampur kolom sampel.
+    let mut charge_stmt = conn
+        .prepare(
+            "SELECT timestamp, start_pct, end_pct, duration_min, energy_wh, rate_w
+             FROM charge_events ORDER BY timestamp ASC",
+        )
+        .map_err(|e| e.to_string())?;
+    let charge_rows = charge_stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, f64>(0)?,
+                row.get::<_, Option<f64>>(1)?,
+                row.get::<_, Option<f64>>(2)?,
+                row.get::<_, Option<f64>>(3)?,
+                row.get::<_, Option<f64>>(4)?,
+                row.get::<_, Option<f64>>(5)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+    out.push_str("\ncharge_timestamp,start_pct,end_pct,duration_min,energy_wh,rate_w\n");
+    for r in charge_rows {
+        let (ts, start, end, duration, energy, rate) = r.map_err(|e| e.to_string())?;
+        out.push_str(&format!(
+            "{},{},{},{},{},{}\n",
+            ts,
+            start.map(|v| v.to_string()).unwrap_or_default(),
+            end.map(|v| v.to_string()).unwrap_or_default(),
+            duration.map(|v| v.to_string()).unwrap_or_default(),
+            energy.map(|v| v.to_string()).unwrap_or_default(),
+            rate.map(|v| v.to_string()).unwrap_or_default(),
+        ));
+    }
+    Ok(out)
+}
+
+fn record_automation_event_inner(
+    conn: &Connection,
+    rule_id: &str,
+    rule_name: &str,
+    action: &str,
+    status: &str,
+    detail: &str,
+) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO automation_events (timestamp, rule_id, rule_name, action, status, detail)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![now_secs(), rule_id, rule_name, action, status, detail],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn recent_automation_events_inner(
+    conn: &Connection,
+    limit: usize,
+) -> Result<Vec<AutomationEvent>, String> {
+    let limit = limit.clamp(1, 1000) as i64;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, timestamp, rule_id, rule_name, action, status, detail
+             FROM automation_events ORDER BY timestamp DESC, id DESC LIMIT ?1",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![limit], |row| {
+            Ok(AutomationEvent {
+                id: row.get(0)?,
+                timestamp: row.get(1)?,
+                rule_id: row.get(2)?,
+                rule_name: row.get(3)?,
+                action: row.get(4)?,
+                status: row.get(5)?,
+                detail: row.get(6)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| e.to_string())?);
     }
     Ok(out)
 }
@@ -521,6 +729,7 @@ mod tests {
             .collect();
         assert!(tables.contains(&"battery_samples".to_string()));
         assert!(tables.contains(&"charge_events".to_string()));
+        assert!(tables.contains(&"automation_events".to_string()));
     }
 
     #[test]
@@ -613,6 +822,19 @@ mod tests {
         assert!(csv.contains("90"));
         assert!(csv.contains("95"));
         assert!(csv.contains("Charging"));
+        assert!(csv.contains("charge_timestamp,start_pct,end_pct"));
+    }
+
+    #[test]
+    fn test_export_csv_includes_charge_events() {
+        let conn = test_conn();
+        init_test_conn(&conn);
+        record_charge_event_inner(&conn, 30.0, 80.0, 60.0, 25.0, 25.0).unwrap();
+        let csv = export_csv_inner(&conn, Path::new("/tmp/loq_test.csv")).unwrap();
+        let section = csv.split("charge_timestamp").nth(1).unwrap();
+        assert!(section.contains("30"));
+        assert!(section.contains("80"));
+        assert!(section.contains("25"));
     }
 
     #[test]
@@ -652,6 +874,57 @@ mod tests {
 
         let result2 = check_capacity_drop_inner(&conn, 30.0).unwrap();
         assert_eq!(result2, None);
+    }
+
+    #[test]
+    fn test_automation_events_roundtrip_and_clear() {
+        let conn = test_conn();
+        init_test_conn(&conn);
+        let pool = DbPool {
+            conn: Mutex::new(conn),
+        };
+
+        pool.record_automation_event(
+            "rule-1",
+            "GPU Hot Guard",
+            "set_fan_auto",
+            "ok",
+            "fan mode auto",
+        )
+        .unwrap();
+        pool.record_automation_event(
+            "rule-2",
+            "Battery Guard",
+            "notify",
+            "error",
+            "notify-send missing",
+        )
+        .unwrap();
+
+        let events = pool.recent_automation_events(10).unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].rule_id, "rule-2");
+        assert_eq!(events[0].status, "error");
+        assert!(events[0].timestamp > 0.0);
+
+        assert_eq!(pool.prune_automation_events(86_400.0).unwrap(), 0);
+        assert_eq!(pool.clear_automation_events().unwrap(), 2);
+        assert!(pool.recent_automation_events(10).unwrap().is_empty());
+
+        record_sample_inner(
+            &pool.conn.lock().unwrap(),
+            Some(50.0),
+            None,
+            None,
+            None,
+            None,
+            None,
+            "Discharging",
+            Some(false),
+        )
+        .unwrap();
+        pool.clear_local_history().unwrap();
+        assert!(pool.get_history(86_400.0).unwrap().is_empty());
     }
 
     #[test]

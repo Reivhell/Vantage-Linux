@@ -14,9 +14,21 @@ function renderDiagChecklist(report) {
   if (!report) return;
 
   const checks = report.checks || [];
+  const statusLabel = (status) => {
+    switch (status) {
+      case "ok":
+        return "Normal";
+      case "warn":
+        return "Peringatan";
+      case "unknown":
+        return "Tidak tersedia";
+      default:
+        return "Kesalahan";
+    }
+  };
   const findStatus = (keywords) => {
     const item = checks.find((c) => keywords.some((k) => c.label.toLowerCase().includes(k)));
-    return item ? (item.status === "ok" ? "Normal" : item.status === "warn" ? "Peringatan" : "Kesalahan") : "Normal";
+    return item ? statusLabel(item.status) : "Tidak tersedia";
   };
 
   if ($("status-cpu-mem")) $("status-cpu-mem").textContent = findStatus(["cpu", "memory", "ram"]);
@@ -51,7 +63,7 @@ export function initDiagnostics() {
       if ($("scan-last-time")) $("scan-last-time").textContent = `Terakhir diperiksa: ${ts}`;
 
       renderDiagChecklist(latestReport);
-      toast(`Pemindaian selesai. Skor kesehatan: ${latestReport.score || 95}/100`);
+      toast(`Pemindaian selesai. Skor kesehatan: ${latestReport.score}/100`);
     } catch (e) {
       toast(String(e), true);
     } finally {
@@ -76,6 +88,10 @@ export function initDiagnostics() {
       }
     }
 
+    const statusLabel = (status) =>
+      status === "ok" ? "Normal" : status === "warn" ? "Perhatian" : status === "unknown" ? "Tidak tersedia" : "Kesalahan";
+    const statusColor = (status) =>
+      status === "ok" ? "var(--success)" : status === "warn" ? "var(--warning)" : "var(--text-muted)";
     const checksHtml = (latestReport.checks || [])
       .map(
         (c) => `
@@ -84,13 +100,13 @@ export function initDiagnostics() {
             <strong style="color: var(--text-primary);">${escapeHtml(c.label)}</strong>
             <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${escapeHtml(c.summary || "")}</div>
           </div>
-          <span style="font-size: 11px; font-weight: 600; color: ${c.status === "ok" ? "var(--success)" : "var(--warning)"};">${c.status === "ok" ? "Normal" : "Perhatian"}</span>
+          <span style="font-size: 11px; font-weight: 600; color: ${statusColor(c.status)};">${statusLabel(c.status)}</span>
         </div>`
       )
       .join("");
 
     showModal(
-      `Laporan Diagnostik Sistem (${latestReport.score || 95}/100)`,
+      `Laporan Diagnostik Sistem (${latestReport.score}/100)`,
       `<div style="max-height: 380px; overflow-y: auto;">
          ${checksHtml || '<p style="color: var(--text-muted);">Semua modul hardware beroperasi normal.</p>'}
        </div>

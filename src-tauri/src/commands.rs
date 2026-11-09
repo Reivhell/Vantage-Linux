@@ -4,32 +4,35 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::Ordering;
 use std::sync::{Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 use sysinfo::{ProcessesToUpdate, System};
 
 use crate::battery;
 use crate::capabilities::{discover, Capabilities};
-use crate::config::{home_dir, save_config, AppConfig, CONFIG_DIR, HELPER_PATH};
+use crate::config::{home_dir, save_config, AppConfig, CONFIG_DIR};
 use crate::db;
 use crate::device;
 use crate::diagnostics;
 use crate::display;
-use crate::gpu::{detect_gpu_mode, gpu_label, gpu_modes, pending_gpu_switch, read_gpu_processes, GpuModeInfo, GpuProcessInfo};
+use crate::error::{AppError, ErrorEnvelope};
+use crate::gpu::{
+    detect_gpu_mode, gpu_label, gpu_modes, pending_gpu_switch, read_gpu_processes, GpuModeInfo,
+    GpuProcessInfo,
+};
 use crate::gpu_ext;
 use crate::history;
 use crate::memory::{read_dimms, MemoryInfo};
 use crate::power::{
     find_attr_path, get_charge_mode, get_thermal_mode, read_sysfs_int, run_helper, set_charge_mode,
-    set_thermal_mode, ChargeModeInfo, PowerLimitAttr, SetLimitCmd, ThermalModeInfo, ATTR_LABELS,
-    ATTR_MAP, ATTR_UNITS,
+    set_thermal_mode, ChargeModeInfo, PowerLimitAttr, SetLimitCmd, ThermalModeInfo, ATTR_MAP,
 };
 use crate::presets;
 use crate::profiles;
+use crate::resource_governor::ResourceGovernor;
+use crate::resource_types::{validate_rule, AutomationEvent, ResourceStatus, Rule};
 use crate::stats::{collect_stats, read_nvidia, SystemStats};
 use crate::types::{ProcessInfo, SimpleResult};
 use crate::{AppState, REFRESH_MS};
-use crate::resource_governor::ResourceGovernor;
-use crate::resource_types::{Rule, ResourceStatus};
 
 static PROC_SYS: Mutex<Option<System>> = Mutex::new(None);
 
@@ -56,6 +59,52 @@ fn power_limit_cache() -> &'static Mutex<PowerLimitCache> {
 #[tauri::command]
 pub fn cmd_discover() -> Capabilities {
     discover()
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct AppInfo {
+    pub version: String,
+    pub os_name: String,
+    pub os_version: String,
+    pub kernel: String,
+    pub helper_installed: bool,
+    pub helper_version: Option<String>,
+    pub helper_outdated: bool,
+    pub config_dir: String,
+}
+
+fn os_release_value(key: &str) -> String {
+    fs::read_to_string("/etc/os-release")
+        .ok()
+        .and_then(|text| {
+            text.lines().find_map(|line| {
+                let (k, v) = line.split_once('=')?;
+                (k == key).then(|| v.trim_matches('"').to_string())
+            })
+        })
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+pub fn cmd_get_app_info(state: tauri::State<'_, AppState>) -> AppInfo {
+    let caps = state.caps.read().unwrap();
+    AppInfo {
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        os_name: {
+            let name = os_release_value("PRETTY_NAME");
+            if name.is_empty() {
+                "Linux".into()
+            } else {
+                name
+            }
+        },
+        os_version: os_release_value("VERSION_ID"),
+        kernel: caps.kernel_version.clone(),
+        helper_installed: caps.helper_installed,
+        helper_version: caps.helper_version.clone(),
+        helper_outdated: caps.helper_outdated,
+        config_dir: home_dir().join(CONFIG_DIR).display().to_string(),
+    }
 }
 
 #[tauri::command]
@@ -177,6 +226,8 @@ pub struct ConfigUpdate {
     pub refresh_interval_ms: Option<u64>,
     pub restore_profile_on_login: Option<bool>,
     pub auto_power_mode: Option<bool>,
+    pub start_minimized: Option<bool>,
+    pub desktop_notifications: Option<bool>,
     pub ac_preset: Option<String>,
     pub battery_preset: Option<String>,
 }
@@ -187,49 +238,52 @@ fn valid_preset(name: &str) -> bool {
 
 #[tauri::command]
 pub fn cmd_update_config(state: tauri::State<'_, AppState>, update: ConfigUpdate) -> SimpleResult {
-    let mut cfg = state.config.write().unwrap();
+    // Validate into a copy first: a rejected field must not mutate live config.
+    let mut snapshot = state.config.read().unwrap().clone();
     if let Some(ms) = update.refresh_interval_ms {
-        cfg.refresh_interval_ms = ms.clamp(250, 10_000);
+        snapshot.refresh_interval_ms = ms.clamp(250, 10_000);
     }
     if let Some(restore) = update.restore_profile_on_login {
-        cfg.restore_profile_on_login = restore;
+        snapshot.restore_profile_on_login = restore;
     }
     if let Some(auto) = update.auto_power_mode {
-        cfg.auto_power_mode = auto;
+        snapshot.auto_power_mode = auto;
+    }
+    if let Some(start_minimized) = update.start_minimized {
+        snapshot.start_minimized = start_minimized;
+    }
+    if let Some(notifications) = update.desktop_notifications {
+        snapshot.desktop_notifications = notifications;
     }
     if let Some(preset) = update.ac_preset {
         if !valid_preset(&preset) {
-            return SimpleResult {
-                ok: false,
-                message: "invalid AC preset".into(),
-            };
+            return SimpleResult::from_app_error(AppError::InvalidInput {
+                field: "ac_preset".into(),
+                reason: format!("'{preset}' tidak didukung"),
+            });
         }
-        cfg.ac_preset = preset;
+        snapshot.ac_preset = preset;
     }
     if let Some(preset) = update.battery_preset {
         if !valid_preset(&preset) {
-            return SimpleResult {
-                ok: false,
-                message: "invalid battery preset".into(),
-            };
+            return SimpleResult::from_app_error(AppError::InvalidInput {
+                field: "battery_preset".into(),
+                reason: format!("'{preset}' tidak didukung"),
+            });
         }
-        cfg.battery_preset = preset;
+        snapshot.battery_preset = preset;
     }
-    let snapshot = cfg.clone();
-    drop(cfg);
-    match save_config(&snapshot) {
-        Ok(()) => {
-            REFRESH_MS.store(snapshot.refresh_interval_ms, Ordering::Relaxed);
-            *state.config.write().unwrap() = snapshot;
-            SimpleResult {
-                ok: true,
-                message: "saved".into(),
-            }
-        }
-        Err(e) => SimpleResult {
+    if let Err(e) = save_config(&snapshot) {
+        return SimpleResult {
             ok: false,
             message: e,
-        },
+        };
+    }
+    REFRESH_MS.store(snapshot.refresh_interval_ms, Ordering::Relaxed);
+    *state.config.write().unwrap() = snapshot;
+    SimpleResult {
+        ok: true,
+        message: "saved".into(),
     }
 }
 
@@ -340,8 +394,14 @@ pub fn cmd_battery_capacity_alert(threshold_pct: f64) -> Result<Option<(f64, f64
 }
 
 #[tauri::command]
-pub fn cmd_export_battery_csv(path: String) -> Result<String, String> {
-    db::export_csv(Path::new(&path))
+pub fn cmd_export_battery_csv(path: String) -> Result<String, ErrorEnvelope> {
+    db::export_csv(Path::new(&path)).map_err(|e| {
+        ErrorEnvelope::from(AppError::Io {
+            op: "export battery CSV".into(),
+            path: Some(std::path::PathBuf::from(&path)),
+            source: e,
+        })
+    })
 }
 
 #[tauri::command]
@@ -360,22 +420,17 @@ pub fn cmd_delete_profile(key: String) -> Result<profiles::ProfileList, String> 
 }
 
 #[tauri::command]
-pub fn cmd_apply_profile(key: String) -> SimpleResult {
+pub fn cmd_apply_profile(state: tauri::State<'_, AppState>, key: String) -> SimpleResult {
     // Ambil profil, lalu terapkan setiap setting melalui command yang sudah ada.
     let profile = match profiles::get_profile(&key) {
         Ok(Some(p)) => p,
         Ok(None) => {
-            return SimpleResult {
-                ok: false,
-                message: format!("profile '{key}' not found"),
-            }
+            return SimpleResult::from_app_error(AppError::NotFound {
+                kind: "profile".into(),
+                key,
+            })
         }
-        Err(e) => {
-            return SimpleResult {
-                ok: false,
-                message: e,
-            }
-        }
+        Err(e) => return SimpleResult::from_app_error(AppError::Other { message: e }),
     };
 
     let mut pending_reboot = Vec::new();
@@ -386,6 +441,9 @@ pub fn cmd_apply_profile(key: String) -> SimpleResult {
             "thermal_mode" => {
                 if set_thermal_mode(value).ok {
                     applied += 1;
+                    let mut cfg = state.config.write().unwrap();
+                    cfg.last_thermal_mode = value.clone();
+                    let _ = save_config(&cfg);
                 }
             }
             "charge_mode" => {
@@ -408,7 +466,12 @@ pub fn cmd_apply_profile(key: String) -> SimpleResult {
                 }
             }
             "gpu_mode" => {
-                pending_reboot.push(format!("GPU mode -> {value} (reboot required)"));
+                if gpu_modes().iter().any(|m| m.key.as_str() == value.as_str())
+                    && cmd_switch_gpu_mode(value.clone()).ok
+                {
+                    applied += 1;
+                    pending_reboot.push(format!("GPU mode -> {value} (reboot required)"));
+                }
             }
             "gpu_runtime_pm" => {
                 if crate::gpu_ext::set_runtime_pm(value).ok {
@@ -416,10 +479,20 @@ pub fn cmd_apply_profile(key: String) -> SimpleResult {
                 }
             }
             "fan_preset" => {
-                if value == "auto" {
-                    if crate::fan_control::cmd_fan_auto(1).ok
-                        || crate::fan_control::cmd_fan_auto(2).ok
-                    {
+                // Apply to both fans: `||` would silently skip fan 2.
+                let profile = value.to_lowercase();
+                if matches!(profile.as_str(), "auto" | "quiet" | "full") {
+                    let mut all_ok = true;
+                    for fan_id in [1, 2] {
+                        let res = crate::fan_control::cmd_apply_fan_profile(
+                            crate::fan_control::FanProfileCmd {
+                                profile: profile.clone(),
+                                fan_id,
+                            },
+                        );
+                        all_ok &= res.ok;
+                    }
+                    if all_ok {
                         applied += 1;
                     }
                 }
@@ -433,7 +506,7 @@ pub fn cmd_apply_profile(key: String) -> SimpleResult {
         profile.name, applied
     );
     if !pending_reboot.is_empty() {
-        message.push_str(" ");
+        message.push(' ');
         message.push_str(&pending_reboot.join("; "));
     }
     SimpleResult { ok: true, message }
@@ -532,7 +605,7 @@ pub fn cmd_get_gpu_processes() -> Vec<GpuProcessInfo> {
 #[tauri::command]
 pub fn cmd_get_power_limits() -> Vec<PowerLimitAttr> {
     let now = SystemTime::now();
-    let mut guard = power_limit_cache().lock().unwrap();
+    let guard = power_limit_cache().lock().unwrap();
     if let Some((cached_at, entries)) = &guard.entries {
         if now
             .duration_since(*cached_at)
@@ -638,10 +711,9 @@ pub fn cmd_set_power_limit(cmd: SetLimitCmd) -> SimpleResult {
         .copied()
         .unwrap_or("");
     if sysfs_name.is_empty() {
-        return SimpleResult {
-            ok: false,
-            message: format!("attribute {} not found", cmd.attr),
-        };
+        return SimpleResult::from_app_error(AppError::HardwareUnsupported {
+            feature: format!("power limit attribute {}", cmd.attr),
+        });
     }
     let res = run_helper("power-limit", &[sysfs_name, &cmd.value.to_string()]);
     if res.ok {
@@ -668,12 +740,14 @@ pub fn cmd_get_device_settings(state: tauri::State<'_, AppState>) -> DeviceSetti
     let fn_lock = fs::read_to_string("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/fn_lock")
         .map(|s| s.trim() == "1")
         .unwrap_or(false);
-    let camera = fs::read_to_string("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/camera_power")
-        .map(|s| s.trim() == "1")
-        .unwrap_or(true);
-    let usb_charging = fs::read_to_string("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/usb_charging")
-        .map(|s| s.trim() == "1")
-        .unwrap_or(false);
+    let camera =
+        fs::read_to_string("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/camera_power")
+            .map(|s| s.trim() == "1")
+            .unwrap_or(true);
+    let usb_charging =
+        fs::read_to_string("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/usb_charging")
+            .map(|s| s.trim() == "1")
+            .unwrap_or(false);
 
     let cfg = state.config.read().unwrap();
     DeviceSettingsState {
@@ -694,50 +768,60 @@ pub fn cmd_set_device_setting(
     key: String,
     value: bool,
 ) -> SimpleResult {
-    let mut cfg = state.config.write().unwrap();
     let val_str = if value { "1" } else { "0" };
     match key.as_str() {
         "keyboard_backlight" => {
-            cfg.keyboard_backlight = Some(value);
-            if value {
-                let _ = crate::keyboard::cmd_keyboard_all(crate::keyboard::KeyboardAllCmd {
+            let res = if value {
+                crate::keyboard::cmd_keyboard_all(crate::keyboard::KeyboardAllCmd {
                     zones: vec![
-                        crate::keyboard::KeyboardZoneCmd { zone: 0, color: "#19C9E8".into() },
-                        crate::keyboard::KeyboardZoneCmd { zone: 1, color: "#168CFF".into() },
-                        crate::keyboard::KeyboardZoneCmd { zone: 2, color: "#168CFF".into() },
-                        crate::keyboard::KeyboardZoneCmd { zone: 3, color: "#19C9E8".into() },
+                        crate::keyboard::KeyboardZoneCmd {
+                            zone: 0,
+                            color: "#19C9E8".into(),
+                        },
+                        crate::keyboard::KeyboardZoneCmd {
+                            zone: 1,
+                            color: "#168CFF".into(),
+                        },
+                        crate::keyboard::KeyboardZoneCmd {
+                            zone: 2,
+                            color: "#168CFF".into(),
+                        },
+                        crate::keyboard::KeyboardZoneCmd {
+                            zone: 3,
+                            color: "#19C9E8".into(),
+                        },
                     ],
                     effect: "Static".into(),
                     brightness_pct: 100,
-                });
+                })
             } else {
-                let _ = crate::keyboard::cmd_keyboard_off();
+                crate::keyboard::cmd_keyboard_off()
+            };
+            if !res.ok {
+                return res;
+            }
+            state.config.write().unwrap().keyboard_backlight = Some(value);
+        }
+        // Firmware-backed toggles: route through the privileged helper and only
+        // record the preference when the hardware accepted the write.
+        "camera" | "fn_lock" | "usb_charging" | "touchpad" => {
+            let res = run_helper("device-setting", &[key.as_str(), val_str]);
+            if !res.ok {
+                return res;
+            }
+            let mut cfg = state.config.write().unwrap();
+            match key.as_str() {
+                "camera" => cfg.camera = Some(value),
+                "fn_lock" => cfg.fn_lock = Some(value),
+                "usb_charging" => cfg.usb_charging = Some(value),
+                "touchpad" => cfg.touchpad = Some(value),
+                _ => unreachable!(),
             }
         }
-        "touchpad" => {
-            cfg.touchpad = Some(value);
-        }
-        "camera" => {
-            cfg.camera = Some(value);
-            let _ = fs::write("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/camera_power", val_str);
-        }
-        "fn_lock" => {
-            cfg.fn_lock = Some(value);
-            let _ = fs::write("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/fn_lock", val_str);
-        }
-        "win_key" => {
-            cfg.win_key = Some(value);
-        }
-        "usb_charging" => {
-            cfg.usb_charging = Some(value);
-            let _ = fs::write("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/usb_charging", val_str);
-        }
-        "vantage_key" => {
-            cfg.vantage_key = Some(value);
-        }
-        "overdrive" => {
-            cfg.overdrive = Some(value);
-        }
+        // App preferences with no firmware interface exposed on this platform.
+        "win_key" => state.config.write().unwrap().win_key = Some(value),
+        "vantage_key" => state.config.write().unwrap().vantage_key = Some(value),
+        "overdrive" => state.config.write().unwrap().overdrive = Some(value),
         _ => {
             return SimpleResult {
                 ok: false,
@@ -745,8 +829,7 @@ pub fn cmd_set_device_setting(
             };
         }
     }
-    let snapshot = cfg.clone();
-    drop(cfg);
+    let snapshot = state.config.read().unwrap().clone();
     let _ = save_config(&snapshot);
     SimpleResult {
         ok: true,
@@ -765,23 +848,52 @@ pub fn cmd_list_rules(state: tauri::State<'_, AppState>) -> Vec<Rule> {
 }
 
 #[tauri::command]
+pub fn cmd_validate_rule(rule: Rule) -> SimpleResult {
+    match validate_rule(&rule) {
+        Ok(()) => SimpleResult {
+            ok: true,
+            message: "valid".into(),
+        },
+        Err(e) => SimpleResult {
+            ok: false,
+            message: e,
+        },
+    }
+}
+
+#[tauri::command]
 pub fn cmd_add_rule(state: tauri::State<'_, AppState>, rule: Rule) -> SimpleResult {
-    let rules_arc = state.governor.rules();
-    let mut rules = rules_arc.write().unwrap();
-    if rules.iter().any(|r| r.id == rule.id) {
+    if let Err(e) = validate_rule(&rule) {
+        return SimpleResult {
+            ok: false,
+            message: e,
+        };
+    }
+    let arc = state.governor.rules();
+    let mut guard = arc.write().unwrap();
+    let mut next = guard.clone();
+    if next.iter().any(|r| r.id == rule.id) {
         return SimpleResult {
             ok: false,
             message: format!("rule '{}' already exists", rule.id),
         };
     }
-    rules.push(rule.clone());
-    drop(rules);
-    if let Err(e) = ResourceGovernor::save_rules(&rules_arc.read().unwrap()) {
+    if next.len() >= 48 {
+        return SimpleResult {
+            ok: false,
+            message: "maximum of 48 rules reached".into(),
+        };
+    }
+    next.push(rule.clone());
+    if let Err(e) = ResourceGovernor::save_rules(&next) {
         return SimpleResult {
             ok: false,
             message: format!("failed to persist rules: {e}"),
         };
     }
+    *guard = next;
+    drop(guard);
+    state.governor.reset_detection_state();
     SimpleResult {
         ok: true,
         message: format!("rule '{}' added", rule.id),
@@ -789,24 +901,59 @@ pub fn cmd_add_rule(state: tauri::State<'_, AppState>, rule: Rule) -> SimpleResu
 }
 
 #[tauri::command]
-pub fn cmd_delete_rule(state: tauri::State<'_, AppState>, id: String) -> SimpleResult {
-    let rules_arc = state.governor.rules();
-    let mut rules = rules_arc.write().unwrap();
-    if !rules.iter().any(|r| r.id == id) {
+pub fn cmd_update_rule(state: tauri::State<'_, AppState>, rule: Rule) -> SimpleResult {
+    if let Err(e) = validate_rule(&rule) {
         return SimpleResult {
             ok: false,
-            message: format!("rule '{}' not found", id),
+            message: e,
         };
     }
-    rules.retain(|r| r.id != id);
-    let kept = rules.clone();
-    drop(rules);
-    if let Err(e) = ResourceGovernor::save_rules(&rules_arc.read().unwrap()) {
+    let arc = state.governor.rules();
+    let mut guard = arc.write().unwrap();
+    let mut next = guard.clone();
+    let Some(existing) = next.iter_mut().find(|r| r.id == rule.id) else {
+        return SimpleResult {
+            ok: false,
+            message: format!("rule '{}' not found", rule.id),
+        };
+    };
+    *existing = rule.clone();
+    if let Err(e) = ResourceGovernor::save_rules(&next) {
         return SimpleResult {
             ok: false,
             message: format!("failed to persist rules: {e}"),
         };
     }
+    *guard = next;
+    drop(guard);
+    state.governor.reset_detection_state();
+    SimpleResult {
+        ok: true,
+        message: format!("rule '{}' updated", rule.id),
+    }
+}
+
+#[tauri::command]
+pub fn cmd_delete_rule(state: tauri::State<'_, AppState>, id: String) -> SimpleResult {
+    let arc = state.governor.rules();
+    let mut guard = arc.write().unwrap();
+    let mut next = guard.clone();
+    if !next.iter().any(|r| r.id == id) {
+        return SimpleResult {
+            ok: false,
+            message: format!("rule '{}' not found", id),
+        };
+    }
+    next.retain(|r| r.id != id);
+    if let Err(e) = ResourceGovernor::save_rules(&next) {
+        return SimpleResult {
+            ok: false,
+            message: format!("failed to persist rules: {e}"),
+        };
+    }
+    *guard = next;
+    drop(guard);
+    state.governor.reset_detection_state();
     SimpleResult {
         ok: true,
         message: format!("rule '{}' deleted", id),
@@ -815,10 +962,10 @@ pub fn cmd_delete_rule(state: tauri::State<'_, AppState>, id: String) -> SimpleR
 
 #[tauri::command]
 pub fn cmd_toggle_rule(state: tauri::State<'_, AppState>, id: String) -> SimpleResult {
-    let rules_arc = state.governor.rules();
-    let mut rules = rules_arc.write().unwrap();
-    let rule = rules.iter_mut().find(|r| r.id == id);
-    let Some(rule) = rule else {
+    let arc = state.governor.rules();
+    let mut guard = arc.write().unwrap();
+    let mut next = guard.clone();
+    let Some(rule) = next.iter_mut().find(|r| r.id == id) else {
         return SimpleResult {
             ok: false,
             message: format!("rule '{}' not found", id),
@@ -826,17 +973,54 @@ pub fn cmd_toggle_rule(state: tauri::State<'_, AppState>, id: String) -> SimpleR
     };
     rule.enabled = !rule.enabled;
     let enabled = rule.enabled;
-    let kept = rules.clone();
-    drop(rules);
-    if let Err(e) = ResourceGovernor::save_rules(&rules_arc.read().unwrap()) {
+    if let Err(e) = ResourceGovernor::save_rules(&next) {
         return SimpleResult {
             ok: false,
             message: format!("failed to persist rules: {e}"),
         };
     }
+    *guard = next;
+    drop(guard);
+    state.governor.reset_detection_state();
     SimpleResult {
         ok: true,
-        message: format!("rule '{}' {}", id, if enabled { "enabled" } else { "disabled" }),
+        message: format!(
+            "rule '{}' {}",
+            id,
+            if enabled { "enabled" } else { "disabled" }
+        ),
     }
 }
 
+#[tauri::command]
+pub fn cmd_get_automation_events(limit: Option<usize>) -> Result<Vec<AutomationEvent>, String> {
+    db::recent_automation_events(limit.unwrap_or(100).clamp(1, 1000))
+}
+
+#[tauri::command]
+pub fn cmd_clear_local_history() -> SimpleResult {
+    match db::clear_local_history() {
+        Ok(()) => SimpleResult {
+            ok: true,
+            message: "local history cleared".into(),
+        },
+        Err(e) => SimpleResult {
+            ok: false,
+            message: e,
+        },
+    }
+}
+
+#[tauri::command]
+pub fn cmd_clear_automation_events() -> SimpleResult {
+    match db::clear_automation_events() {
+        Ok(count) => SimpleResult {
+            ok: true,
+            message: format!("{count} automation event(s) cleared"),
+        },
+        Err(e) => SimpleResult {
+            ok: false,
+            message: e,
+        },
+    }
+}

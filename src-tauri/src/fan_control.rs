@@ -5,9 +5,7 @@ use std::sync::{Mutex, OnceLock};
 
 use crate::config::HELPER_PATH;
 use crate::power::run_helper;
-use crate::stats::{
-    find_hwmon, read_cpu_temp, read_fan_rpms, read_gpu_temp_sysfs,
-};
+use crate::stats::{find_hwmon, read_cpu_temp, read_fan_rpms, read_gpu_temp_sysfs};
 use crate::types::SimpleResult;
 
 // ---------------------------------------------------------------------------
@@ -63,6 +61,7 @@ fn fan_state() -> &'static Mutex<HashMap<i32, FanApplied>> {
     FAN_STATE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+#[cfg(test)]
 fn fan_reset_test_state() {
     *firmware_reset_flag().lock().unwrap() = false;
     fan_state().lock().unwrap().clear();
@@ -131,6 +130,7 @@ pub fn fan_check_reset(fan_id: i32, rpm: u32) {
             }
         } else {
             entry.zero_rpm_count = 0;
+            *firmware_reset_flag().lock().unwrap() = false;
         }
     }
 }
@@ -158,24 +158,20 @@ pub fn cmd_fan_status() -> FanStatus {
     let cpu_temp = read_cpu_temp();
     // Throttle jika CPU >= 95 °C. GPU temp dibaca dari sysfs jika tersedia.
     let gpu_temp = read_gpu_temp_sysfs();
-    let throttle = cpu_temp.map_or(false, |t| t >= 95.0)
-        || gpu_temp.map_or(false, |t| t >= 100.0);
+    let throttle =
+        cpu_temp.is_some_and(|t| t >= 95.0) || gpu_temp.is_some_and(|t| t >= 100.0);
 
     // Debounce throttle alert agar tidak spam.
     {
         let mut alerted = throttle_alerted().lock().unwrap();
-        if throttle {
-            *alerted = true;
-        } else {
-            *alerted = false;
-        }
+        *alerted = throttle;
     }
 
     // Deteksi reset pada kedua kipas.
     fan_check_reset(1, fan1);
     fan_check_reset(2, fan2);
 
-    let mut guard = fan_state().lock().unwrap();
+    let guard = fan_state().lock().unwrap();
     let manual_active = guard.values().any(|e| e.mode == "manual" && e.pwm > 0);
     drop(guard);
 
@@ -221,10 +217,7 @@ pub fn cmd_apply_fan_profile(cmd: FanProfileCmd) -> SimpleResult {
                 FanCurvePoint { temp: 90, pwm: 75 },
             ];
             let payload = serde_json::to_string(&points).unwrap_or_default();
-            let r = run_helper(
-                "fan-curve",
-                &[cmd.fan_id.to_string().as_str(), &payload],
-            );
+            let r = run_helper("fan-curve", &[cmd.fan_id.to_string().as_str(), &payload]);
             if r.ok {
                 fan_record_applied(cmd.fan_id, "curve", 0);
             }
@@ -232,10 +225,7 @@ pub fn cmd_apply_fan_profile(cmd: FanProfileCmd) -> SimpleResult {
         }
         "full" => {
             // Paksa 100% via manual (fail-safe masih aktif saat daemon mati).
-            let r = run_helper(
-                "fan-manual",
-                &[cmd.fan_id.to_string().as_str(), "100"],
-            );
+            let r = run_helper("fan-manual", &[cmd.fan_id.to_string().as_str(), "100"]);
             if r.ok {
                 fan_record_applied(cmd.fan_id, "manual", 100);
             }
@@ -252,45 +242,80 @@ pub fn cmd_apply_fan_profile(cmd: FanProfileCmd) -> SimpleResult {
 #[tauri::command]
 pub fn cmd_apply_fan_curve(cmd: FanCurveCmd) -> SimpleResult {
     if cmd.fan_id != 1 && cmd.fan_id != 2 {
-        return SimpleResult { ok: false, message: "fan_id must be 1 or 2".into() };
+        return SimpleResult {
+            ok: false,
+            message: "fan_id must be 1 or 2".into(),
+        };
     }
     if cmd.points.len() < 2 || cmd.points.len() > 10 {
-        return SimpleResult { ok: false, message: "expected 2–10 curve points".into() };
+        return SimpleResult {
+            ok: false,
+            message: "expected 2–10 curve points".into(),
+        };
     }
-    if cmd.points.iter().any(|p| !(0..=110).contains(&p.temp) || !(0..=100).contains(&p.pwm)) {
-        return SimpleResult { ok: false, message: "temp 0–110 °C, speed 0–100 % required".into() };
+    if cmd
+        .points
+        .iter()
+        .any(|p| !(0..=110).contains(&p.temp) || !(0..=100).contains(&p.pwm))
+    {
+        return SimpleResult {
+            ok: false,
+            message: "temp 0–110 °C, speed 0–100 % required".into(),
+        };
     }
     let mut points = cmd.points;
     points.sort_by_key(|p| p.temp);
     let payload = serde_json::to_string(&points).unwrap_or_default();
-    run_helper("fan-curve", &[cmd.fan_id.to_string().as_str(), &payload])
+    let res = run_helper("fan-curve", &[cmd.fan_id.to_string().as_str(), &payload]);
+    if res.ok {
+        fan_record_applied(cmd.fan_id, "curve", 0);
+    }
+    res
 }
 
 #[tauri::command]
 pub fn cmd_set_fan_manual(fan_id: i32, pwm_percent: i32) -> SimpleResult {
     if fan_id != 1 && fan_id != 2 {
-        return SimpleResult { ok: false, message: "fan_id must be 1 or 2".into() };
+        return SimpleResult {
+            ok: false,
+            message: "fan_id must be 1 or 2".into(),
+        };
     }
-    run_helper(
+    let pwm = pwm_percent.clamp(0, 100);
+    let res = run_helper(
         "fan-manual",
-        &[fan_id.to_string().as_str(), pwm_percent.clamp(0, 100).to_string().as_str()],
-    )
+        &[fan_id.to_string().as_str(), pwm.to_string().as_str()],
+    );
+    if res.ok {
+        fan_record_applied(fan_id, "manual", pwm);
+    }
+    res
 }
 
 #[tauri::command]
 pub fn cmd_fan_auto(fan_id: i32) -> SimpleResult {
     if fan_id != 1 && fan_id != 2 {
-        return SimpleResult { ok: false, message: "fan_id must be 1 or 2".into() };
+        return SimpleResult {
+            ok: false,
+            message: "fan_id must be 1 or 2".into(),
+        };
     }
-    run_helper("fan-auto", &[fan_id.to_string().as_str()])
+    let res = run_helper("fan-auto", &[fan_id.to_string().as_str()]);
+    if res.ok {
+        fan_record_applied(fan_id, "auto", 0);
+    }
+    res
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+
     #[test]
     fn test_fan_record_and_reset_detection() {
+        let _guard = TEST_LOCK.lock().unwrap();
         fan_reset_test_state();
         // RPM 0 dengan manual PWM > 0 tiga kali -> firmware reset.
         fan_record_applied(1, "manual", 80);
@@ -303,10 +328,13 @@ mod tests {
 
     #[test]
     fn test_rpm_recovery_clears_reset() {
+        let _guard = TEST_LOCK.lock().unwrap();
         fan_reset_test_state();
         fan_record_applied(2, "manual", 60);
         fan_check_reset(2, 0);
         fan_check_reset(2, 0);
+        fan_check_reset(2, 0);
+        assert!(fan_is_firmware_reset());
         fan_check_reset(2, 2000);
         assert!(!fan_is_firmware_reset());
     }

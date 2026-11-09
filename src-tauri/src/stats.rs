@@ -208,7 +208,9 @@ pub fn collect_stats() -> SystemStats {
     history::history_push("cpu_temp", cpu_temp.unwrap_or(0.0) as f64);
     history::history_push("gpu_temp", nvidia.3.map(|v| v as f64).unwrap_or(0.0));
     history::history_push("fan1_rpm", fan1 as f64);
-    history::history_push("gpu_power_w", nvidia.4.unwrap_or(0.0));
+    if let Some(p) = ssd_temp {
+        history::history_push("ssd_temp", p as f64);
+    }
     history::history_push("disk_read_kbps", disk_read);
     history::history_push("disk_write_kbps", disk_write);
     history::history_push("gpu_util", nvidia.0.unwrap_or(0) as f64);
@@ -496,7 +498,9 @@ fn read_ssd_temp() -> Option<f32> {
             let path = entry.path();
             let name = fs::read_to_string(path.join("name")).unwrap_or_default();
             let name = name.trim().to_lowercase();
-            if name.contains("nvme") || name.contains("nvidia") || name.contains("acpi") {
+            // SSD only: matching "nvidia"/"acpi" here would report GPU or
+            // battery thermal zones as the drive temperature.
+            if name.contains("nvme") || name.contains("drivetemp") {
                 // Coba baca temp1_input..temp5_input
                 for i in 1..=5 {
                     let temp_f = path.join(format!("temp{}_input", i));
@@ -708,7 +712,8 @@ fn read_diskstats_bytes() -> (u64, u64, u64) {
     let mut io_ticks = 0u64;
     for line in text.lines() {
         let fields: Vec<&str> = line.split_whitespace().collect();
-        if fields.len() < 10 {
+        // field 12 (io_ticks) requires at least 14 columns.
+        if fields.len() < 14 {
             continue;
         }
         let name = fields[2];
@@ -732,6 +737,7 @@ fn read_diskstats_bytes() -> (u64, u64, u64) {
     (read_sectors * 512, write_sectors * 512, io_ticks)
 }
 
+#[allow(clippy::type_complexity)]
 pub(crate) fn read_nvidia() -> (
     Option<u32>,
     Option<u64>,

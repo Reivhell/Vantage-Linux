@@ -44,6 +44,10 @@
           <svg viewBox="0 0 24 24" fill="none"><rect width="14" height="14" x="5" y="5" rx="2"/><line x1="9" x2="9" y1="2" y2="5"/><line x1="15" x2="15" y1="2" y2="5"/><line x1="9" x2="9" y1="19" y2="22"/><line x1="15" x2="15" y1="19" y2="22"/><line x1="2" x2="5" y1="9" y2="9"/><line x1="2" x2="5" y1="15" y2="15"/><line x1="19" x2="22" y1="9" y2="9"/><line x1="19" x2="22" y1="15" y2="15"/></svg>
           <span>GPU</span>
         </button>
+        <button class="nav-item" data-tab="automation" role="tab" aria-selected="false" id="nav-automation">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>Automation</span>
+        </button>
         <button class="nav-item" data-tab="device" role="tab" aria-selected="false" id="nav-device">
           <svg viewBox="0 0 24 24" fill="none"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/></svg>
           <span>Device</span>
@@ -67,10 +71,10 @@
           <line x1="2" x2="22" y1="20" y2="20"/>
         </svg>
         <div class="device-badge-info">
-          <span class="device-model-name" id="sidebar-device-model">Lenovo LOQ 15IAX9E</span>
+          <span class="device-model-name" id="sidebar-device-model">--</span>
           <span class="device-conn-status">
             <span class="status-dot"></span>
-            <span>Connected</span>
+            <span id="sidebar-conn-status">Menghubungkan…</span>
           </span>
         </div>
       </div>
@@ -106,7 +110,7 @@
       <!-- ===================================================================
            SCREEN 1: HOME DASHBOARD
            =================================================================== -->
-      <section class="panel-group" id="tab-home">
+      <section class="panel-group active" id="tab-home">
         <div class="screen-header">
           <div class="screen-header-left">
             <h1>Selamat datang!</h1>
@@ -122,8 +126,8 @@
             </div>
             <div class="mode-info-block">
               <span class="mode-info-tag">Mode Saat Ini</span>
-              <h2 class="mode-info-title" id="dash-mode-title">Balanced</h2>
-              <p class="mode-info-desc" id="dash-mode-desc">Seimbang antara performa dan daya.</p>
+              <h2 class="mode-info-title" id="dash-mode-title">--</h2>
+              <p class="mode-info-desc" id="dash-mode-desc">Memuat profil aktif…</p>
               <div>
                 <button class="btn-primary" id="btn-change-mode">Ubah Mode</button>
               </div>
@@ -142,9 +146,9 @@
               <span class="metric-label">CPU</span>
             </div>
             <div class="metric-value-row">
-              <span class="metric-value-big mono" id="home-cpu-pct">12%</span>
+              <span class="metric-value-big mono" id="home-cpu-pct">--</span>
             </div>
-            <span class="metric-sub mono" id="home-cpu-freq">2.8 GHz</span>
+            <span class="metric-sub mono" id="home-cpu-freq">--</span>
             <svg class="sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none">
               <defs>
                 <linearGradient id="cyanGradient" x1="0" y1="0" x2="0" y2="1">
@@ -152,7 +156,7 @@
                   <stop offset="100%" stop-color="#19C9E8" stop-opacity="0"/>
                 </linearGradient>
               </defs>
-              <polyline class="sparkline-path" id="home-cpu-spark" points="0,22 15,20 30,24 45,15 60,18 75,12 90,16 100,14" />
+              <polyline class="sparkline-path" id="home-cpu-spark" points="" />
             </svg>
           </article>
 
@@ -162,11 +166,11 @@
               <span class="metric-label">GPU</span>
             </div>
             <div class="metric-value-row">
-              <span class="metric-value-big mono" id="home-gpu-pct">8%</span>
+              <span class="metric-value-big mono" id="home-gpu-pct">--</span>
             </div>
-            <span class="metric-sub mono" id="home-gpu-clock">210 MHz</span>
+            <span class="metric-sub mono" id="home-gpu-clock">--</span>
             <svg class="sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none">
-              <polyline class="sparkline-path" id="home-gpu-spark" points="0,25 20,22 40,24 60,19 80,21 100,18" />
+              <polyline class="sparkline-path" id="home-gpu-spark" points="" />
             </svg>
           </article>
 
@@ -176,11 +180,11 @@
               <span class="metric-label">RAM</span>
             </div>
             <div class="metric-value-row">
-              <span class="metric-value-big mono" id="home-ram-pct">34%</span>
+              <span class="metric-value-big mono" id="home-ram-pct">--</span>
             </div>
-            <span class="metric-sub mono" id="home-ram-used">5.4 / 16 GB</span>
+            <span class="metric-sub mono" id="home-ram-used">--</span>
             <svg class="sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none">
-              <polyline class="sparkline-path" id="home-ram-spark" points="0,20 20,19 40,21 60,20 80,18 100,17" />
+              <polyline class="sparkline-path" id="home-ram-spark" points="" />
             </svg>
           </article>
 
@@ -190,9 +194,9 @@
               <span class="metric-label">Baterai</span>
             </div>
             <div class="metric-value-row">
-              <span class="metric-value-big mono" id="home-bat-pct">78%</span>
+              <span class="metric-value-big mono" id="home-bat-pct">--</span>
             </div>
-            <span class="metric-sub" id="home-bat-time">2 jam 45 menit</span>
+            <span class="metric-sub" id="home-bat-time">--</span>
             <div class="battery-capsule-wrap">
               <div class="battery-capsule">
                 <div class="battery-capsule-fill" id="home-bat-fill"></div>
@@ -209,15 +213,15 @@
             <div class="stat-item-row">
               <div class="stat-item-col">
                 <span class="stat-col-lbl">CPU</span>
-                <span class="stat-col-val mono" id="home-temp-cpu">48°C</span>
+                <span class="stat-col-val mono" id="home-temp-cpu">-- °C</span>
               </div>
               <div class="stat-item-col">
                 <span class="stat-col-lbl">GPU</span>
-                <span class="stat-col-val mono" id="home-temp-gpu">42°C</span>
+                <span class="stat-col-val mono" id="home-temp-gpu">-- °C</span>
               </div>
               <div class="stat-item-col">
                 <span class="stat-col-lbl">SSD</span>
-                <span class="stat-col-val mono" id="home-temp-ssd">36°C</span>
+                <span class="stat-col-val mono" id="home-temp-ssd">-- °C</span>
               </div>
             </div>
           </article>
@@ -228,11 +232,11 @@
             <div class="stat-item-row">
               <div class="stat-item-col">
                 <span class="stat-col-lbl">CPU</span>
-                <span class="stat-col-val mono" id="home-fan-cpu">1200 RPM</span>
+                <span class="stat-col-val mono" id="home-fan-cpu">--</span>
               </div>
               <div class="stat-item-col">
                 <span class="stat-col-lbl">GPU</span>
-                <span class="stat-col-val mono" id="home-fan-gpu">1100 RPM</span>
+                <span class="stat-col-val mono" id="home-fan-gpu">--</span>
               </div>
             </div>
           </article>
@@ -243,7 +247,7 @@
             <div class="network-stat-wrap">
               <div>
                 <div class="stat-col-lbl">Wi-Fi</div>
-                <div class="network-status-text" id="home-net-status">Terhubung</div>
+                <div class="network-status-text" id="home-net-status">--</div>
               </div>
               <svg class="network-wifi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
@@ -259,7 +263,7 @@
       <!-- ===================================================================
            SCREEN 2: PERFORMANCE ("Mode Performa")
            =================================================================== -->
-      <section class="panel-group active" id="tab-performance">
+      <section class="panel-group" id="tab-performance">
         <div class="screen-header">
           <div class="screen-header-left">
             <h1>Mode Performa</h1>
@@ -278,8 +282,8 @@
             <p class="profile-desc">Kebisingan rendah, daya hemat.</p>
           </div>
 
-          <!-- Balanced (Default Active) -->
-          <div class="profile-card active" data-profile="balanced" id="prof-card-balanced">
+          <!-- Balanced -->
+          <div class="profile-card" data-profile="balanced" id="prof-card-balanced">
             <div class="profile-icon-wrap">
               <svg viewBox="0 0 24 24" fill="none"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>
             </div>
@@ -318,7 +322,7 @@
               <span class="setting-label-text">GPU Mode</span>
             </div>
             <div class="setting-row-right">
-              <span class="setting-value-badge" id="perf-gpu-val">Hybrid (disarankan)</span>
+              <span class="setting-value-badge" id="perf-gpu-val">--</span>
               <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
             </div>
           </div>
@@ -332,24 +336,11 @@
               <span class="setting-label-text">Refresh Rate</span>
             </div>
             <div class="setting-row-right">
-              <span class="setting-value-badge" id="perf-refresh-val">Otomatis (144 Hz)</span>
+              <span class="setting-value-badge" id="perf-refresh-val">--</span>
               <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
             </div>
           </div>
 
-          <!-- Over Drive -->
-          <div class="setting-row-card" id="row-perf-overdrive">
-            <div class="setting-row-left">
-              <div class="setting-icon-box">
-                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              </div>
-              <span class="setting-label-text">Over Drive</span>
-            </div>
-            <div class="setting-row-right">
-              <span class="setting-value-badge" id="perf-overdrive-val">Nonaktif</span>
-              <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -372,7 +363,7 @@
               <circle class="gauge-progress-ring" id="bat-circle-progress" cx="50" cy="50" r="42" stroke-dasharray="264" stroke-dashoffset="58" />
             </svg>
             <div class="gauge-center-content">
-              <span class="gauge-center-pct mono" id="bat-gauge-pct">78%</span>
+              <span class="gauge-center-pct mono" id="bat-gauge-pct">--</span>
               <span class="gauge-center-sub">Sisa daya</span>
             </div>
           </div>
@@ -383,7 +374,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 Estimasi waktu
               </span>
-              <span class="battery-info-val" id="bat-stat-time">2 jam 45 menit</span>
+              <span class="battery-info-val" id="bat-stat-time">--</span>
             </div>
 
             <div class="battery-info-row">
@@ -391,7 +382,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
                 Kesehatan baterai
               </span>
-              <span class="battery-info-val" id="bat-stat-health">Good (92%)</span>
+              <span class="battery-info-val" id="bat-stat-health">--</span>
             </div>
 
             <div class="battery-info-row">
@@ -399,7 +390,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
                 Siklus pengisian
               </span>
-              <span class="battery-info-val mono" id="bat-stat-cycles">78</span>
+              <span class="battery-info-val mono" id="bat-stat-cycles">--</span>
             </div>
 
             <div class="battery-info-row">
@@ -407,7 +398,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="16" height="10" x="2" y="7" rx="2" ry="2"/><line x1="22" x2="22" y1="11" y2="13"/></svg>
                 Kapasitas penuh
               </span>
-              <span class="battery-info-val" id="bat-stat-cap">56.4 Wh (desain 60 Wh)</span>
+              <span class="battery-info-val" id="bat-stat-cap">--</span>
             </div>
           </div>
         </article>
@@ -438,7 +429,7 @@
                 <text class="chart-axis-label" x="32" y="45" text-anchor="end">75%</text>
                 <text class="chart-axis-label" x="32" y="72" text-anchor="end">50%</text>
                 <text class="chart-axis-label" x="32" y="99" text-anchor="end">25%</text>
-                <text class="chart-axis-label" x="32" y="126" text-anchor="end">0%</text>
+                <text class="chart-axis-label" x="32" y="126" text-anchor="end">--</text>
 
                 <!-- Gradient definition -->
                 <defs>
@@ -449,10 +440,10 @@
                 </defs>
 
                 <!-- Polygon Area Fill -->
-                <polygon id="bat-chart-area" fill="url(#batAreaGrad)" points="45,123 45,95 85,80 135,50 185,55 235,40 285,42 330,38 330,123" />
+                <polygon id="bat-chart-area" fill="url(#batAreaGrad)" points="" />
 
                 <!-- Stroke Line -->
-                <polyline id="bat-chart-line" fill="none" stroke="#19C9E8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="45,95 85,80 135,50 185,55 235,40 285,42 330,38" />
+                <polyline id="bat-chart-line" fill="none" stroke="#19C9E8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="" />
 
                 <!-- X Axis Labels -->
                 <text class="chart-axis-label" x="45" y="136" text-anchor="middle">00:00</text>
@@ -470,10 +461,10 @@
             <div class="charging-setting-item">
               <div class="charging-setting-meta">
                 <span class="charging-setting-name">Batas pengisian (charge threshold)</span>
-                <span class="charging-setting-val" id="threshold-subtext">80%</span>
+                <span class="charging-setting-val" id="threshold-subtext">--</span>
               </div>
               <label class="switch">
-                <input type="checkbox" id="switch-threshold" checked />
+                <input type="checkbox" id="switch-threshold" />
                 <span class="slider"></span>
               </label>
             </div>
@@ -481,10 +472,10 @@
             <div class="charging-setting-item">
               <div class="charging-setting-meta">
                 <span class="charging-setting-name">Rapid Charge</span>
-                <span class="charging-setting-val" id="rapid-subtext">Aktif</span>
+                <span class="charging-setting-val" id="rapid-subtext">--</span>
               </div>
               <label class="switch">
-                <input type="checkbox" id="switch-rapid" checked />
+                <input type="checkbox" id="switch-rapid" />
                 <span class="slider"></span>
               </label>
             </div>
@@ -522,10 +513,10 @@
                 <circle class="gauge-bg-ring" cx="50" cy="50" r="40" />
                 <circle class="gauge-progress-ring" id="ring-cpu-temp" cx="50" cy="50" r="40" stroke="#19C9E8" stroke-dasharray="251" stroke-dashoffset="130" />
               </svg>
-              <span class="temp-val-center mono" id="gauge-temp-cpu">48°C</span>
+              <span class="temp-val-center mono" id="gauge-temp-cpu">-- °C</span>
             </div>
             <span class="temp-label-bottom">CPU</span>
-            <span class="status-badge-pill" id="badge-temp-cpu">Normal</span>
+            <span class="status-badge-pill" id="badge-temp-cpu">--</span>
           </article>
 
           <!-- GPU -->
@@ -535,10 +526,10 @@
                 <circle class="gauge-bg-ring" cx="50" cy="50" r="40" />
                 <circle class="gauge-progress-ring" id="ring-gpu-temp" cx="50" cy="50" r="40" stroke="#21D6B2" stroke-dasharray="251" stroke-dashoffset="145" />
               </svg>
-              <span class="temp-val-center mono" id="gauge-temp-gpu">42°C</span>
+              <span class="temp-val-center mono" id="gauge-temp-gpu">-- °C</span>
             </div>
             <span class="temp-label-bottom">GPU</span>
-            <span class="status-badge-pill" id="badge-temp-gpu">Normal</span>
+            <span class="status-badge-pill" id="badge-temp-gpu">--</span>
           </article>
 
           <!-- SSD -->
@@ -548,10 +539,10 @@
                 <circle class="gauge-bg-ring" cx="50" cy="50" r="40" />
                 <circle class="gauge-progress-ring" id="ring-ssd-temp" cx="50" cy="50" r="40" stroke="#27D995" stroke-dasharray="251" stroke-dashoffset="160" />
               </svg>
-              <span class="temp-val-center mono" id="gauge-temp-ssd">36°C</span>
+              <span class="temp-val-center mono" id="gauge-temp-ssd">-- °C</span>
             </div>
             <span class="temp-label-bottom">SSD</span>
-            <span class="status-badge-pill" id="badge-temp-ssd">Normal</span>
+            <span class="status-badge-pill" id="badge-temp-ssd">--</span>
           </article>
         </div>
 
@@ -591,9 +582,9 @@
               <text class="chart-axis-label" x="32" y="135" text-anchor="end">0°C</text>
 
               <!-- Lines for CPU, GPU, SSD -->
-              <polyline id="thermal-line-cpu" fill="none" stroke="#19C9E8" stroke-width="2" stroke-linecap="round" points="40,75 80,72 120,74 160,70 200,68 240,72 280,71 320,69 360,72 400,70 440,68 480,71 520,70 560,72 590,70" />
-              <polyline id="thermal-line-gpu" fill="none" stroke="#168CFF" stroke-width="2" stroke-linecap="round" points="40,85 80,84 120,83 160,82 200,81 240,84 280,82 320,81 360,83 400,82 440,80 480,83 520,81 560,83 590,82" />
-              <polyline id="thermal-line-ssd" fill="none" stroke="#A855F7" stroke-width="2" stroke-linecap="round" points="40,95 80,94 120,95 160,94 200,94 240,95 280,94 320,95 360,94 400,95 440,94 480,95 520,94 560,95 590,94" />
+              <polyline id="thermal-line-cpu" fill="none" stroke="#19C9E8" stroke-width="2" stroke-linecap="round" points="" />
+              <polyline id="thermal-line-gpu" fill="none" stroke="#168CFF" stroke-width="2" stroke-linecap="round" points="" />
+              <polyline id="thermal-line-ssd" fill="none" stroke="#A855F7" stroke-width="2" stroke-linecap="round" points="" />
 
               <!-- X Labels -->
               <text class="chart-axis-label" x="40" y="146" text-anchor="middle">0m</text>
@@ -627,15 +618,15 @@
             <h3 class="card-title">Intel UHD Graphics</h3>
             <div class="gpu-card-stats">
               <div class="gpu-stat-box">
-                <span class="gpu-stat-num mono" id="gpu-i-util">0%</span>
+                <span class="gpu-stat-num mono" id="gpu-i-util">--</span>
                 <span class="gpu-stat-lbl">Utilisasi</span>
               </div>
               <div class="gpu-stat-box">
-                <span class="gpu-stat-num mono" id="gpu-i-temp">48°C</span>
+                <span class="gpu-stat-num mono" id="gpu-i-temp">-- °C</span>
                 <span class="gpu-stat-lbl">Suhu</span>
               </div>
               <div class="gpu-stat-box">
-                <span class="gpu-stat-num mono" id="gpu-i-vram">0 MB</span>
+                <span class="gpu-stat-num mono" id="gpu-i-vram">--</span>
                 <span class="gpu-stat-lbl">VRAM</span>
               </div>
             </div>
@@ -643,18 +634,18 @@
 
           <!-- NVIDIA -->
           <article class="card">
-            <h3 class="card-title" id="gpu-nvidia-card-title">NVIDIA GeForce RTX</h3>
+            <h3 class="card-title" id="gpu-nvidia-card-title">NVIDIA GPU</h3>
             <div class="gpu-card-stats">
               <div class="gpu-stat-box">
-                <span class="gpu-stat-num mono" id="gpu-d-util">8%</span>
+                <span class="gpu-stat-num mono" id="gpu-d-util">--</span>
                 <span class="gpu-stat-lbl">Utilisasi</span>
               </div>
               <div class="gpu-stat-box">
-                <span class="gpu-stat-num mono" id="gpu-d-temp">42°C</span>
+                <span class="gpu-stat-num mono" id="gpu-d-temp">-- °C</span>
                 <span class="gpu-stat-lbl">Suhu</span>
               </div>
               <div class="gpu-stat-box">
-                <span class="gpu-stat-num mono" id="gpu-d-vram">512 MB</span>
+                <span class="gpu-stat-num mono" id="gpu-d-vram">--</span>
                 <span class="gpu-stat-lbl">VRAM</span>
               </div>
             </div>
@@ -665,8 +656,8 @@
         <h2 class="section-title">Mode GPU</h2>
         <div class="card gpu-mode-card" id="btn-select-gpu-mode">
           <div>
-            <h3 class="card-title" style="margin-bottom: 4px;" id="gpu-cur-mode-title">Hybrid Mode (disarankan)</h3>
-            <p style="font-size: 11.5px; color: var(--text-secondary);" id="gpu-cur-mode-desc">Otomatis beralih antara iGPU dan dGPU.</p>
+            <h3 class="card-title" style="margin-bottom: 4px;" id="gpu-cur-mode-title">--</h3>
+            <p style="font-size: 11.5px; color: var(--text-secondary);" id="gpu-cur-mode-desc">--</p>
           </div>
           <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
         </div>
@@ -681,11 +672,11 @@
               </div>
               <div>
                 <div class="setting-label-text">GPU Runtime Power Management</div>
-                <div style="font-size: 11px; color: var(--cyan);" id="gpu-pm-sub">Aktif</div>
+                <div style="font-size: 11px; color: var(--cyan);" id="gpu-pm-sub">--</div>
               </div>
             </div>
             <label class="switch">
-              <input type="checkbox" id="switch-gpu-pm" checked />
+              <input type="checkbox" id="switch-gpu-pm" />
               <span class="slider"></span>
             </label>
           </div>
@@ -743,11 +734,11 @@
                 <circle class="gauge-progress-ring" id="ring-fan-cpu" cx="50" cy="50" r="42" stroke="#19C9E8" stroke-dasharray="264" stroke-dashoffset="130" />
               </svg>
               <div class="fan-val-center">
-                <span class="fan-rpm-num mono" id="fan-cpu-rpm">1200 RPM</span>
+                <span class="fan-rpm-num mono" id="fan-cpu-rpm">--</span>
                 <span class="fan-label-sub">CPU Fan</span>
               </div>
             </div>
-            <span class="badge-fan-mode" id="badge-fan-cpu-mode">Auto</span>
+            <span class="badge-fan-mode" id="badge-fan-cpu-mode">--</span>
           </article>
 
           <!-- GPU Fan -->
@@ -758,11 +749,11 @@
                 <circle class="gauge-progress-ring" id="ring-fan-gpu" cx="50" cy="50" r="42" stroke="#A855F7" stroke-dasharray="264" stroke-dashoffset="145" />
               </svg>
               <div class="fan-val-center">
-                <span class="fan-rpm-num mono" id="fan-gpu-rpm">1100 RPM</span>
+                <span class="fan-rpm-num mono" id="fan-gpu-rpm">--</span>
                 <span class="fan-label-sub">GPU Fan</span>
               </div>
             </div>
-            <span class="badge-fan-mode" id="badge-fan-gpu-mode">Auto</span>
+            <span class="badge-fan-mode" id="badge-fan-gpu-mode">--</span>
           </article>
         </div>
 
@@ -792,10 +783,10 @@
               <!-- Y Labels -->
               <text class="chart-axis-label" x="38" y="24" text-anchor="end">100%</text>
               <text class="chart-axis-label" x="38" y="79" text-anchor="end">50%</text>
-              <text class="chart-axis-label" x="38" y="134" text-anchor="end">0%</text>
+              <text class="chart-axis-label" x="38" y="134" text-anchor="end">--</text>
 
               <!-- Curve Path -->
-              <polyline id="fan-curve-line" fill="none" stroke="#19C9E8" stroke-width="2.5" stroke-linecap="round" points="45,130 150,130 250,90 350,55 450,25" />
+              <polyline id="fan-curve-line" fill="none" stroke="#19C9E8" stroke-width="2.5" stroke-linecap="round" points="" />
 
               <!-- Control points (clickable / draggable) -->
               <circle cx="45" cy="130" r="5" fill="#19C9E8" stroke="#FFFFFF" stroke-width="2" class="curve-pt" />
@@ -816,7 +807,135 @@
       </section>
 
       <!-- ===================================================================
-           SCREEN 7: DEVICE SETTINGS ("Pengaturan Perangkat")
+           SCREEN 7: AUTOMATION ("Otomatisasi Sumber Daya")
+           =================================================================== -->
+      <section class="panel-group" id="tab-automation">
+        <div class="screen-header">
+          <div class="screen-header-left">
+            <h1>Otomatisasi Sumber Daya</h1>
+            <p>Aturan tertutup: telemetri nyata, aksi nyata, dan audit lokal.</p>
+          </div>
+          <div class="screen-header-actions">
+            <button class="btn-secondary" id="btn-automation-refresh" type="button">Muat ulang</button>
+            <button class="btn-primary" id="btn-automation-new" type="button">Aturan baru</button>
+          </div>
+        </div>
+
+        <div class="automation-telemetry" aria-label="Telemetri otomatisasi">
+          <article class="card automation-metric">
+            <span class="automation-metric-label">CPU</span>
+            <strong class="automation-metric-value mono" id="auto-cpu">--</strong>
+            <span class="automation-metric-sub" id="auto-cpu-temp">-- °C</span>
+          </article>
+          <article class="card automation-metric">
+            <span class="automation-metric-label">GPU</span>
+            <strong class="automation-metric-value mono" id="auto-gpu">--</strong>
+            <span class="automation-metric-sub" id="auto-gpu-temp">-- °C</span>
+          </article>
+          <article class="card automation-metric">
+            <span class="automation-metric-label">Kipas</span>
+            <strong class="automation-metric-value mono" id="auto-fan">--</strong>
+            <span class="automation-metric-sub">RPM maksimum</span>
+          </article>
+          <article class="card automation-metric">
+            <span class="automation-metric-label">Baterai</span>
+            <strong class="automation-metric-value mono" id="auto-battery">--</strong>
+            <span class="automation-metric-sub" id="auto-power">--</span>
+          </article>
+          <article class="card automation-metric">
+            <span class="automation-metric-label">RAM</span>
+            <strong class="automation-metric-value mono" id="auto-ram">--</strong>
+            <span class="automation-metric-sub">Penggunaan</span>
+          </article>
+        </div>
+
+        <div class="automation-grid">
+          <article class="card automation-rules-card">
+            <div class="automation-card-head">
+              <div>
+                <h3 class="card-title">Aturan aktif</h3>
+                <p class="automation-hint" id="automation-rule-count">Memuat…</p>
+              </div>
+              <span class="badge-soft" id="automation-engine-state">Engine</span>
+            </div>
+            <div id="automation-rule-list" class="rule-list" aria-live="polite"></div>
+          </article>
+
+          <article class="card automation-events-card">
+            <div class="automation-card-head">
+              <div>
+                <h3 class="card-title">Audit eksekusi</h3>
+                <p class="automation-hint">Aksi yang benar-benar dijalankan, tersimpan di SQLite lokal.</p>
+              </div>
+              <button class="btn-secondary btn-compact" id="btn-automation-clear" type="button">Bersihkan</button>
+            </div>
+            <div id="automation-event-list" class="event-list" aria-live="polite"></div>
+          </article>
+        </div>
+
+        <article class="card automation-editor" id="automation-editor" hidden>
+          <div class="automation-card-head">
+            <h3 class="card-title" id="auto-editor-title">Aturan baru</h3>
+            <button class="btn-secondary btn-compact" id="btn-auto-cancel" type="button">Tutup</button>
+          </div>
+
+          <div class="automation-form-grid">
+            <label class="automation-field">
+              <span>Nama aturan</span>
+              <input class="settings-select" id="auto-rule-name" maxlength="80" autocomplete="off" />
+            </label>
+            <label class="automation-field">
+              <span>ID unik</span>
+              <input class="settings-select mono" id="auto-rule-id" maxlength="64" autocomplete="off" placeholder="gpu-hot-guard" />
+            </label>
+            <label class="automation-field">
+              <span>Mode kondisi</span>
+              <select class="settings-select" id="auto-condition-mode">
+                <option value="Any">ANY — salah satu ambang</option>
+                <option value="All">ALL — semua ambang</option>
+              </select>
+            </label>
+            <label class="automation-field automation-field-inline">
+              <span>Status</span>
+              <span class="automation-check">
+                <input type="checkbox" id="auto-rule-enabled" checked />
+                <span>Aktifkan aturan</span>
+              </span>
+            </label>
+          </div>
+
+          <h4 class="automation-subtitle">Ambang</h4>
+          <div id="auto-conditions" class="automation-conditions"></div>
+          <button class="btn-secondary btn-compact" id="btn-auto-add-condition" type="button">Tambah ambang</button>
+
+          <h4 class="automation-subtitle">Aksi</h4>
+          <div class="automation-form-grid">
+            <label class="automation-field">
+              <span>Jenis aksi</span>
+              <select class="settings-select" id="auto-action-kind">
+                <option value="Notify">Notifikasi desktop</option>
+                <option value="SetThermalMode">Ubah mode thermal</option>
+                <option value="SetFanAuto">Kembalikan kipas ke firmware</option>
+                <option value="SetFanCurve">Terapkan kurva kipas</option>
+                <option value="SetFanManual">Atur PWM kipas manual</option>
+                <option value="SetGpuPowerLimit">Batasi daya GPU</option>
+                <option value="SetGpuRuntimePm">Ubah runtime PM GPU</option>
+                <option value="Renice">Ubah prioritas proses</option>
+              </select>
+            </label>
+            <div id="auto-action-fields" class="automation-action-fields"></div>
+          </div>
+
+          <p class="automation-error" id="auto-editor-error" role="alert"></p>
+          <div class="automation-editor-actions">
+            <button class="btn-secondary" id="btn-auto-cancel-2" type="button">Batal</button>
+            <button class="btn-primary" id="btn-auto-save" type="button">Simpan aturan</button>
+          </div>
+        </article>
+      </section>
+
+      <!-- ===================================================================
+           SCREEN 8: DEVICE SETTINGS ("Pengaturan Perangkat")
            =================================================================== -->
       <section class="panel-group" id="tab-device">
         <div class="screen-header">
@@ -836,7 +955,7 @@
               <span class="setting-label-text">Keyboard Backlight</span>
             </div>
             <label class="switch">
-              <input type="checkbox" id="switch-dev-backlight" checked />
+              <input type="checkbox" id="switch-dev-backlight" />
               <span class="slider"></span>
             </label>
           </div>
@@ -850,7 +969,7 @@
               <span class="setting-label-text">Touchpad</span>
             </div>
             <label class="switch">
-              <input type="checkbox" id="switch-dev-touchpad" checked />
+              <input type="checkbox" id="switch-dev-touchpad" />
               <span class="slider"></span>
             </label>
           </div>
@@ -864,7 +983,7 @@
               <span class="setting-label-text">Kamera</span>
             </div>
             <label class="switch">
-              <input type="checkbox" id="switch-dev-camera" checked />
+              <input type="checkbox" id="switch-dev-camera" />
               <span class="slider"></span>
             </label>
           </div>
@@ -892,7 +1011,7 @@
               <span class="setting-label-text">Tombol Windows</span>
             </div>
             <label class="switch">
-              <input type="checkbox" id="switch-dev-winkey" checked />
+              <input type="checkbox" id="switch-dev-winkey" />
               <span class="slider"></span>
             </label>
           </div>
@@ -920,7 +1039,7 @@
               <span class="setting-label-text">Lenovo Vantage Key</span>
             </div>
             <label class="switch">
-              <input type="checkbox" id="switch-dev-vantagekey" checked />
+              <input type="checkbox" id="switch-dev-vantagekey" />
               <span class="slider"></span>
             </label>
           </div>
@@ -960,7 +1079,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
               <span>CPU & Memory</span>
             </div>
-            <span class="diag-status-text" id="status-cpu-mem">Normal</span>
+            <span class="diag-status-text" id="status-cpu-mem">Belum diperiksa</span>
           </div>
 
           <div class="diag-result-row">
@@ -968,7 +1087,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
               <span>Storage</span>
             </div>
-            <span class="diag-status-text" id="status-storage">Normal</span>
+            <span class="diag-status-text" id="status-storage">Belum diperiksa</span>
           </div>
 
           <div class="diag-result-row">
@@ -976,7 +1095,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
               <span>Battery</span>
             </div>
-            <span class="diag-status-text" id="status-battery">Normal</span>
+            <span class="diag-status-text" id="status-battery">Belum diperiksa</span>
           </div>
 
           <div class="diag-result-row">
@@ -984,7 +1103,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
               <span>Thermal</span>
             </div>
-            <span class="diag-status-text" id="status-thermal">Normal</span>
+            <span class="diag-status-text" id="status-thermal">Belum diperiksa</span>
           </div>
 
           <div class="diag-result-row">
@@ -992,7 +1111,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
               <span>GPU</span>
             </div>
-            <span class="diag-status-text" id="status-gpu">Normal</span>
+            <span class="diag-status-text" id="status-gpu">Belum diperiksa</span>
           </div>
 
           <div class="diag-result-row">
@@ -1000,7 +1119,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
               <span>Driver & System</span>
             </div>
-            <span class="diag-status-text" id="status-driver">Normal</span>
+            <span class="diag-status-text" id="status-driver">Belum diperiksa</span>
           </div>
         </div>
 
@@ -1032,87 +1151,63 @@
         <!-- Tab Content: Umum -->
         <div class="settings-tab-content active" id="subtab-umum">
           <article class="card settings-group-card">
-            <h3 class="card-title">Tampilan</h3>
+            <h3 class="card-title">Startup & Sesi</h3>
             <div class="settings-field-row">
-              <span class="settings-field-label">Tema</span>
-              <div class="segmented-pills">
-                <button class="seg-pill" id="theme-light">Terang</button>
-                <button class="seg-pill active" id="theme-dark">Gelap</button>
-                <button class="seg-pill" id="theme-auto">Otomatis</button>
-              </div>
+              <span class="settings-field-label">Pulihkan profil terakhir saat login</span>
+              <label class="switch">
+                <input type="checkbox" id="switch-cfg-startup" />
+                <span class="slider"></span>
+              </label>
             </div>
             <div class="settings-field-row">
-              <span class="settings-field-label">Bahasa</span>
-              <select class="settings-select" id="sel-language">
-                <option value="id" selected>Indonesia</option>
-                <option value="en">English (US)</option>
-              </select>
+              <span class="settings-field-label">Mulai dalam keadaan diminimalkan</span>
+              <label class="switch">
+                <input type="checkbox" id="switch-cfg-tray" />
+                <span class="slider"></span>
+              </label>
             </div>
           </article>
 
           <article class="card settings-group-card">
-            <h3 class="card-title">Startup</h3>
+            <h3 class="card-title">Telemetri</h3>
             <div class="settings-field-row">
-              <span class="settings-field-label">Jalankan saat startup</span>
-              <label class="switch">
-                <input type="checkbox" id="switch-cfg-startup" checked />
-                <span class="slider"></span>
-              </label>
+              <span class="settings-field-label">Interval pembaruan telemetri</span>
+              <select class="settings-select" id="sel-refresh-interval">
+                <option value="500">0,5 detik</option>
+                <option value="1000">1 detik</option>
+                <option value="2000">2 detik</option>
+                <option value="5000">5 detik</option>
+              </select>
             </div>
-            <div class="settings-field-row">
-              <span class="settings-field-label">Minimalkan ke system tray</span>
-              <label class="switch">
-                <input type="checkbox" id="switch-cfg-tray" checked />
-                <span class="slider"></span>
-              </label>
-            </div>
+            <p class="settings-hint">Interval lebih pendek memberi data lebih halus dengan biaya CPU lebih tinggi.</p>
           </article>
 
           <article class="card settings-group-card">
             <h3 class="card-title">Data & Privasi</h3>
             <div class="settings-field-row" id="row-cfg-export" style="cursor: pointer;">
-              <span class="settings-field-label">Ekspor data</span>
+              <span class="settings-field-label">Ekspor riwayat baterai (CSV)</span>
               <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
             </div>
             <div class="settings-field-row" id="row-cfg-clear" style="cursor: pointer;">
-              <span class="settings-field-label">Hapus data</span>
+              <span class="settings-field-label">Hapus seluruh riwayat lokal</span>
               <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
             </div>
+            <p class="settings-hint">Riwayat mencakup sampel baterai, event pengisian, dan audit otomatisasi. Aturan dan konfigurasi tidak dihapus.</p>
           </article>
         </div>
 
         <!-- Tab Content: Notifikasi -->
         <div class="settings-tab-content" id="subtab-notifikasi" style="display: none;">
           <article class="card settings-group-card">
-            <h3 class="card-title">Notifikasi Sistem</h3>
+            <h3 class="card-title">Notifikasi Desktop</h3>
             <div class="settings-field-row">
-              <span class="settings-field-label">Peringatan Suhu Tinggi (&gt; 85°C)</span>
+              <span class="settings-field-label">Kirim notifikasi dari otomatisasi</span>
               <label class="switch">
-                <input type="checkbox" id="notif-temp" checked />
+                <input type="checkbox" id="switch-cfg-notifications" />
                 <span class="slider"></span>
               </label>
             </div>
-            <div class="settings-field-row">
-              <span class="settings-field-label">Peringatan Kapasitas Baterai Menurun</span>
-              <label class="switch">
-                <input type="checkbox" id="notif-bat" checked />
-                <span class="slider"></span>
-              </label>
-            </div>
-            <div class="settings-field-row">
-              <span class="settings-field-label">Notifikasi Pergantian Mode Performa</span>
-              <label class="switch">
-                <input type="checkbox" id="notif-profile" checked />
-                <span class="slider"></span>
-              </label>
-            </div>
-            <div class="settings-field-row">
-              <span class="settings-field-label">Peringatan Driver dan Hardware</span>
-              <label class="switch">
-                <input type="checkbox" id="notif-driver" checked />
-                <span class="slider"></span>
-              </label>
-            </div>
+            <p class="settings-hint">Hanya berlaku untuk aksi notifikasi pada aturan otomatisasi. Notifikasi dikirim melalui server notifikasi desktop (D-Bus).</p>
           </article>
         </div>
 
@@ -1122,19 +1217,23 @@
             <h3 class="card-title">Tentang Lenovo Vantage Linux</h3>
             <div class="settings-field-row">
               <span class="settings-field-label">Versi Aplikasi</span>
-              <span class="mono" style="color: var(--text-secondary);">0.1.0 (Stable)</span>
+              <span class="mono" id="about-version" style="color: var(--text-secondary);">--</span>
             </div>
             <div class="settings-field-row">
               <span class="settings-field-label">Model Laptop</span>
-              <span id="about-device-model" style="color: var(--text-secondary);">Lenovo LOQ 15IAX9E (83LK)</span>
+              <span id="about-device-model" style="color: var(--text-secondary);">--</span>
             </div>
             <div class="settings-field-row">
               <span class="settings-field-label">Sistem Operasi</span>
-              <span id="about-os" style="color: var(--text-secondary);">CachyOS Linux (x86_64)</span>
+              <span id="about-os" style="color: var(--text-secondary);">--</span>
             </div>
             <div class="settings-field-row">
-              <span class="settings-field-label">Backend Daemon / Helper</span>
-              <span class="mono" id="about-helper" style="color: var(--success);">loq-helper v0.1.0 Ready</span>
+              <span class="settings-field-label">Kernel</span>
+              <span class="mono" id="about-kernel" style="color: var(--text-secondary);">--</span>
+            </div>
+            <div class="settings-field-row">
+              <span class="settings-field-label">Helper Privileged</span>
+              <span class="mono" id="about-helper" style="color: var(--text-secondary);">--</span>
             </div>
             <div class="settings-field-row">
               <span class="settings-field-label">Lisensi</span>

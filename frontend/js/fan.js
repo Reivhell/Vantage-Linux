@@ -1,13 +1,8 @@
 // Screen 6: Fan Control ("Kontrol Kipas")
 import { $, invoke, run, toast } from "./core.js";
 
-let currentFanCurve = [
-  { temp: 0, pwm: 0 },
-  { temp: 40, pwm: 0 },
-  { temp: 60, pwm: 45 },
-  { temp: 80, pwm: 75 },
-  { temp: 100, pwm: 100 },
-];
+let currentFanCurve = [];
+let defaultFanCurve = [];
 
 let activeFanMode = "auto";
 
@@ -19,12 +14,13 @@ export async function loadFan() {
     ]);
 
     if (info && info.default_curve && info.default_curve.length) {
-      currentFanCurve = info.default_curve.map((p) => ({ ...p }));
+      defaultFanCurve = info.default_curve.map((p) => ({ ...p }));
+      currentFanCurve = defaultFanCurve.map((p) => ({ ...p }));
     }
 
     if (stats) {
-      const rpm1 = stats.fan1_rpm ? `${stats.fan1_rpm} RPM` : "1200 RPM";
-      const rpm2 = stats.fan2_rpm ? `${stats.fan2_rpm} RPM` : "1100 RPM";
+      const rpm1 = stats.fan1_rpm ? `${stats.fan1_rpm} RPM` : "--";
+      const rpm2 = stats.fan2_rpm ? `${stats.fan2_rpm} RPM` : "--";
       if ($("fan-cpu-rpm")) $("fan-cpu-rpm").textContent = rpm1;
       if ($("fan-gpu-rpm")) $("fan-gpu-rpm").textContent = rpm2;
 
@@ -38,14 +34,31 @@ export async function loadFan() {
         ring.style.strokeDasharray = `${c}`;
         ring.style.strokeDashoffset = `${offset}`;
       };
-      setRing("ring-fan-cpu", stats.fan1_rpm || 1200);
-      setRing("ring-fan-gpu", stats.fan2_rpm || 1100);
+      if (stats.fan1_rpm) setRing("ring-fan-cpu", stats.fan1_rpm);
+      if (stats.fan2_rpm) setRing("ring-fan-gpu", stats.fan2_rpm);
     }
 
     renderFanCurveChart();
   } catch (err) {
     console.error("loadFan error:", err);
+    toast(String(err), true);
   }
+}
+
+function badgeLabel(mode) {
+  return mode.charAt(0).toUpperCase() + mode.slice(1);
+}
+
+async function applyFanModeToBoth(command, profile) {
+  for (const fanId of [1, 2]) {
+    const args =
+      command === "cmd_apply_fan_profile"
+        ? { cmd: { profile, fan_id: fanId } }
+        : { fanId };
+    const res = await run(command, args);
+    if (!res) return false;
+  }
+  return true;
 }
 
 function renderFanCurveChart() {
@@ -78,29 +91,30 @@ export function initFan() {
   // Operating Mode Segmented Pills
   document.querySelectorAll("#fan-modes-pills button").forEach((btn) => {
     btn.addEventListener("click", async () => {
+      const mode = btn.dataset.fanMode;
+      let ok = true;
+      if (mode === "auto") {
+        ok = await applyFanModeToBoth("cmd_fan_auto");
+      } else if (mode === "silent") {
+        ok = await applyFanModeToBoth("cmd_apply_fan_profile", "quiet");
+      } else if (mode === "performance") {
+        ok = await applyFanModeToBoth("cmd_apply_fan_profile", "full");
+      }
+
+      if (!ok) return;
+
       document.querySelectorAll("#fan-modes-pills button").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
-      activeFanMode = btn.dataset.fanMode;
+      activeFanMode = mode;
 
-      const badgeCpu = $("badge-fan-cpu-mode");
-      const badgeGpu = $("badge-fan-gpu-mode");
-      const label = activeFanMode.charAt(0).toUpperCase() + activeFanMode.slice(1);
-      if (badgeCpu) badgeCpu.textContent = label;
-      if (badgeGpu) badgeGpu.textContent = label;
+      const label = badgeLabel(activeFanMode);
+      if ($("badge-fan-cpu-mode")) $("badge-fan-cpu-mode").textContent = label;
+      if ($("badge-fan-gpu-mode")) $("badge-fan-gpu-mode").textContent = label;
 
-      if (activeFanMode === "auto") {
-        await run("cmd_fan_auto", { fan_id: 0 });
-        toast("Mode kipas: Auto");
-      } else if (activeFanMode === "silent") {
-        await run("cmd_apply_fan_profile", { profile: "quiet", fan_id: 1 });
-        await run("cmd_apply_fan_profile", { profile: "quiet", fan_id: 2 });
-        toast("Mode kipas: Silent");
-      } else if (activeFanMode === "performance") {
-        await run("cmd_apply_fan_profile", { profile: "full", fan_id: 1 });
-        await run("cmd_apply_fan_profile", { profile: "full", fan_id: 2 });
-        toast("Mode kipas: Performance");
+      if (mode === "custom") {
+        toast("Mode Custom: tekan Terapkan untuk mengirim kurva.");
       } else {
-        toast("Mode kipas: Custom (kurva manual)");
+        toast(`Mode kipas: ${label}`);
       }
     });
   });
@@ -136,24 +150,26 @@ export function initFan() {
 
   // Reset to default
   $("btn-fan-reset")?.addEventListener("click", () => {
-    currentFanCurve = [
-      { temp: 0, pwm: 0 },
-      { temp: 40, pwm: 0 },
-      { temp: 60, pwm: 45 },
-      { temp: 80, pwm: 75 },
-      { temp: 100, pwm: 100 },
-    ];
+    if (!defaultFanCurve.length) {
+      toast("Kurva bawaan tidak tersedia dari backend.", true);
+      return;
+    }
+    currentFanCurve = defaultFanCurve.map((p) => ({ ...p }));
     renderFanCurveChart();
     toast("Kurva kipas dikembalikan ke bawaan.");
   });
 
-  // Apply curve
+  // Apply curve to both fans; a partial failure is reported and leaves the UI honest.
   $("btn-fan-apply")?.addEventListener("click", async () => {
-    const cmd = {
-      fan_id: 1,
-      points: currentFanCurve,
-    };
-    const res = await run("cmd_apply_fan_curve", { cmd });
-    if (res) toast("Kurva kipas kustom berhasil diterapkan.");
+    if (currentFanCurve.length < 2) {
+      toast("Kurva belum dimuat dari backend.", true);
+      return;
+    }
+    for (const fanId of [1, 2]) {
+      const cmd = { fan_id: fanId, points: currentFanCurve };
+      const res = await run("cmd_apply_fan_curve", { cmd });
+      if (!res) return;
+    }
+    toast("Kurva kipas kustom diterapkan ke kedua kipas.");
   });
 }

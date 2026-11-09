@@ -8,7 +8,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone)]
 pub enum AppError {
     /// Underlying IO failure (file, sysfs, helper spawn).
-    Io { op: String, path: Option<PathBuf>, source: String },
+    Io {
+        op: String,
+        path: Option<PathBuf>,
+        source: String,
+    },
     /// Operation requires elevated privileges that are not available.
     Permission { op: String },
     /// Hardware/firmware does not expose the requested interface.
@@ -16,11 +20,19 @@ pub enum AppError {
     /// Invalid user input.
     InvalidInput { field: String, reason: String },
     /// Privileged helper invocation failed.
-    HelperFailed { subcommand: String, exit: Option<i32>, stderr: String },
+    HelperFailed {
+        subcommand: String,
+        exit: Option<i32>,
+        stderr: String,
+    },
     /// Requested entity not found.
     NotFound { kind: String, key: String },
     /// Resource limit / threshold violation.
-    LimitExceeded { metric: String, value: f64, limit: f64 },
+    LimitExceeded {
+        metric: String,
+        value: f64,
+        limit: f64,
+    },
     /// Serialization / deserialization failure.
     Serde { context: String, source: String },
     /// Generic fallback.

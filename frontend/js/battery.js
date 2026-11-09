@@ -10,11 +10,11 @@ export async function loadBattery() {
 
     if (detail) {
       // Circular gauge
-      const pct = Math.round(detail.percent ?? 78);
-      if ($("bat-gauge-pct")) $("bat-gauge-pct").textContent = `${pct}%`;
+      const pct = detail.percent == null ? null : Math.round(detail.percent);
+      if ($("bat-gauge-pct")) $("bat-gauge-pct").textContent = pct == null ? "--" : `${pct}%`;
 
       const circle = $("bat-circle-progress");
-      if (circle) {
+      if (circle && pct != null) {
         // Circumference for r=42 is 2 * Math.PI * 42 ~= 263.89
         const circumference = 264;
         const offset = circumference - (pct / 100) * circumference;
@@ -24,17 +24,35 @@ export async function loadBattery() {
 
       // Information list
       if ($("bat-stat-health")) {
-        const health = detail.health_pct ? `${fmt(detail.health_pct, 0)}%` : "92%";
-        $("bat-stat-health").textContent = `Good (${health})`;
+        $("bat-stat-health").textContent =
+          detail.health_pct == null ? "--" : `${fmt(detail.health_pct, 0)}%`;
       }
 
       if ($("bat-stat-cycles")) {
-        $("bat-stat-cycles").textContent = detail.cycles ?? "78";
+        $("bat-stat-cycles").textContent = detail.cycles ?? "--";
+      }
+
+      if ($("bat-stat-time")) {
+        const energyNow = detail.energy_now_wh;
+        const energyFull = detail.energy_full_wh;
+        const power = detail.power_w;
+        const charging = /charg/i.test(detail.status || "");
+        const energyToMove = charging
+          ? energyFull != null && energyNow != null
+            ? Math.max(0, energyFull - energyNow)
+            : null
+          : energyNow;
+        if (energyToMove != null && power != null && Math.abs(power) > 0.1) {
+          const totalMinutes = Math.round((energyToMove / Math.abs(power)) * 60);
+          $("bat-stat-time").textContent = `${Math.floor(totalMinutes / 60)} jam ${totalMinutes % 60} menit`;
+        } else {
+          $("bat-stat-time").textContent = "--";
+        }
       }
 
       if ($("bat-stat-cap")) {
-        const full = detail.energy_full_wh ? `${fmt(detail.energy_full_wh, 1)} Wh` : "56.4 Wh";
-        const design = detail.energy_design_wh ? `${fmt(detail.energy_design_wh, 0)} Wh` : "60 Wh";
+        const full = detail.energy_full_wh == null ? "--" : `${fmt(detail.energy_full_wh, 1)} Wh`;
+        const design = detail.energy_design_wh == null ? "--" : `${fmt(detail.energy_design_wh, 0)} Wh`;
         $("bat-stat-cap").textContent = `${full} (desain ${design})`;
       }
     }
@@ -45,6 +63,10 @@ export async function loadBattery() {
       const isRapid = chargeMode.current === "rapid" || chargeMode.current === "Fast";
       if ($("switch-threshold")) $("switch-threshold").checked = isConservation;
       if ($("switch-rapid")) $("switch-rapid").checked = isRapid;
+      if ($("threshold-subtext")) {
+        $("threshold-subtext").textContent = isConservation ? "Aktif" : "Nonaktif";
+      }
+      if ($("rapid-subtext")) $("rapid-subtext").textContent = isRapid ? "Aktif" : "Nonaktif";
     }
 
     await renderBatteryHistoryChart();
@@ -66,16 +88,15 @@ async function renderBatteryHistoryChart() {
       const start = now - batteryWindow;
       const points = history.map((s) => {
         const x = 45 + Math.max(0, Math.min(1, (s.timestamp - start) / batteryWindow)) * 285;
-        const y = 123 - ((s.percent ?? 78) / 100) * 108;
+        const y = 123 - ((s.percent ?? 0) / 100) * 108;
         return `${x.toFixed(1)},${y.toFixed(1)}`;
       });
       line.setAttribute("points", points.join(" "));
       area.setAttribute("points", `45,123 ${points.join(" ")} 330,123`);
     } else {
-      // Default smooth realistic charging curve from mockup
-      const defLine = "45,95 85,80 135,50 185,55 235,40 285,42 330,38";
-      line.setAttribute("points", defLine);
-      area.setAttribute("points", `45,123 ${defLine} 330,123`);
+      // Belum ada histori nyata: kosongkan grafik, jangan menggambar data fiktif.
+      line.setAttribute("points", "");
+      area.setAttribute("points", "");
     }
   } catch (e) {
     console.warn("battery history error:", e);
@@ -96,20 +117,26 @@ export function initBattery() {
   // Threshold switch
   $("switch-threshold")?.addEventListener("change", async (e) => {
     const checked = e.target.checked;
-    const sub = $("threshold-subtext");
-    if (sub) sub.textContent = checked ? "80%" : "Nonaktif";
     const mode = checked ? "conservation" : "standard";
     const res = await run("cmd_set_charge_mode", { mode });
-    if (res) toast(checked ? "Batas pengisian diaktifkan pada 80%" : "Batas pengisian dinonaktifkan (100%)");
+    if (!res) {
+      e.target.checked = !checked;
+      return;
+    }
+    if ($("threshold-subtext")) $("threshold-subtext").textContent = checked ? "Aktif" : "Nonaktif";
+    toast(checked ? "Mode konservasi pengisian diaktifkan" : "Batas pengisian dinonaktifkan");
   });
 
   // Rapid Charge switch
   $("switch-rapid")?.addEventListener("change", async (e) => {
     const checked = e.target.checked;
-    const sub = $("rapid-subtext");
-    if (sub) sub.textContent = checked ? "Aktif" : "Nonaktif";
     const mode = checked ? "rapid" : "standard";
     const res = await run("cmd_set_charge_mode", { mode });
-    if (res) toast(checked ? "Rapid Charge diaktifkan" : "Rapid Charge dinonaktifkan");
+    if (!res) {
+      e.target.checked = !checked;
+      return;
+    }
+    if ($("rapid-subtext")) $("rapid-subtext").textContent = checked ? "Aktif" : "Nonaktif";
+    toast(checked ? "Rapid Charge diaktifkan" : "Rapid Charge dinonaktifkan");
   });
 }

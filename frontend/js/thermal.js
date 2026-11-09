@@ -16,13 +16,13 @@ export async function loadThermal() {
 export function updateThermalGauges(stats) {
   if (!stats) return;
 
-  const cpu = Math.round(stats.temp_cpu || 48);
-  const gpu = Math.round(stats.temp_gpu || 42);
-  const ssd = Math.round(stats.temp_ssd || 36);
+  const cpu = stats.cpu_temp == null ? null : Math.round(stats.cpu_temp);
+  const gpu = stats.gpu_temp == null ? null : Math.round(stats.gpu_temp);
+  const ssd = stats.ssd_temp == null ? null : Math.round(stats.ssd_temp);
 
-  if ($("gauge-temp-cpu")) $("gauge-temp-cpu").textContent = `${cpu}°C`;
-  if ($("gauge-temp-gpu")) $("gauge-temp-gpu").textContent = `${gpu}°C`;
-  if ($("gauge-temp-ssd")) $("gauge-temp-ssd").textContent = `${ssd}°C`;
+  if ($("gauge-temp-cpu")) $("gauge-temp-cpu").textContent = cpu == null ? "--" : `${cpu}°C`;
+  if ($("gauge-temp-gpu")) $("gauge-temp-gpu").textContent = gpu == null ? "--" : `${gpu}°C`;
+  if ($("gauge-temp-ssd")) $("gauge-temp-ssd").textContent = ssd == null ? "--" : `${ssd}°C`;
 
   // Circumference for r=40 is 2 * Math.PI * 40 ~= 251.3
   const c = 251;
@@ -35,14 +35,18 @@ export function updateThermalGauges(stats) {
     ring.style.strokeDashoffset = `${offset}`;
   };
 
-  setRing("ring-cpu-temp", cpu);
-  setRing("ring-gpu-temp", gpu);
-  setRing("ring-ssd-temp", ssd);
+  if (cpu != null) setRing("ring-cpu-temp", cpu);
+  if (gpu != null) setRing("ring-gpu-temp", gpu);
+  if (ssd != null) setRing("ring-ssd-temp", ssd);
 
   const updateBadge = (id, temp) => {
     const el = $(id);
     if (!el) return;
-    if (temp >= 85) {
+    if (temp == null) {
+      el.textContent = "--";
+      el.style.color = "var(--text-muted)";
+      el.style.background = "transparent";
+    } else if (temp >= 85) {
       el.textContent = "Tinggi";
       el.style.color = "var(--error)";
       el.style.background = "rgba(255, 101, 122, 0.15)";
@@ -64,39 +68,35 @@ export function updateThermalGauges(stats) {
 
 export async function updateThermalChart() {
   try {
-    const [cpuHist, gpuHist] = await Promise.all([
-      invoke("cmd_get_history", { metric: "cpu_temp", window_seconds: thermalWindow }),
-      invoke("cmd_get_history", { metric: "gpu_temp", window_seconds: thermalWindow }),
+    const [cpuHist, gpuHist, ssdHist] = await Promise.all([
+      invoke("cmd_get_history", { metric: "cpu_temp", windowSeconds: thermalWindow }),
+      invoke("cmd_get_history", { metric: "gpu_temp", windowSeconds: thermalWindow }),
+      invoke("cmd_get_history", { metric: "ssd_temp", windowSeconds: thermalWindow }),
     ]);
 
-    const lineCpu = $("thermal-line-cpu");
-    const lineGpu = $("thermal-line-gpu");
-    const lineSsd = $("thermal-line-ssd");
+    const draw = (id, hist) => {
+      const line = $(id);
+      if (!line) return;
+      if (!hist?.points || hist.points.length < 2) {
+        line.setAttribute("points", "");
+        return;
+      }
+      const now = Date.now() / 1000;
+      const start = now - thermalWindow;
+      const pts = hist.points.map((p) => {
+        const x = 40 + Math.max(0, Math.min(1, (p.timestamp - start) / thermalWindow)) * 550;
+        const y = 131 - (Math.min(100, p.value) / 100) * 116;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      });
+      line.setAttribute("points", pts.join(" "));
+    };
 
     // Coordinate space: X in [40, 590], Y in [131 (0°C) to 15 (100°C)]
-    if (cpuHist && cpuHist.points && cpuHist.points.length > 2) {
-      const now = Date.now() / 1000;
-      const start = now - thermalWindow;
-      const pts = cpuHist.points.map((p) => {
-        const x = 40 + Math.max(0, Math.min(1, (p.timestamp - start) / thermalWindow)) * 550;
-        const y = 131 - (Math.min(100, p.value) / 100) * 116;
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      });
-      lineCpu?.setAttribute("points", pts.join(" "));
-    }
-
-    if (gpuHist && gpuHist.points && gpuHist.points.length > 2) {
-      const now = Date.now() / 1000;
-      const start = now - thermalWindow;
-      const pts = gpuHist.points.map((p) => {
-        const x = 40 + Math.max(0, Math.min(1, (p.timestamp - start) / thermalWindow)) * 550;
-        const y = 131 - (Math.min(100, p.value) / 100) * 116;
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      });
-      lineGpu?.setAttribute("points", pts.join(" "));
-    }
+    draw("thermal-line-cpu", cpuHist);
+    draw("thermal-line-gpu", gpuHist);
+    draw("thermal-line-ssd", ssdHist);
   } catch (e) {
-    // Graceful fallback to default mockup lines
+    console.warn("thermal history unavailable:", e);
   }
 }
 

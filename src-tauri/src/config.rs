@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 
 pub(crate) const CONFIG_DIR: &str = ".config/loq-control";
 pub(crate) const HELPER_PATH: &str = "/usr/local/bin/loq-helper";
@@ -18,6 +18,8 @@ pub struct AppConfig {
     pub window_height: i32,
     #[serde(default)]
     pub auto_power_mode: bool,
+    #[serde(default = "default_true")]
+    pub desktop_notifications: bool,
     #[serde(default = "default_ac_preset")]
     pub ac_preset: String,
     #[serde(default = "default_battery_preset")]
@@ -40,6 +42,10 @@ pub struct AppConfig {
     pub overdrive: Option<bool>,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 fn default_ac_preset() -> String {
     "balanced".into()
 }
@@ -58,6 +64,7 @@ impl Default for AppConfig {
             window_width: 1280,
             window_height: 850,
             auto_power_mode: false,
+            desktop_notifications: true,
             ac_preset: default_ac_preset(),
             battery_preset: default_battery_preset(),
             keyboard_backlight: Some(true),

@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DisplayMode {
@@ -173,7 +173,7 @@ fn parse_xrandr(text: &str) -> Vec<DisplayOutput> {
             let (width, height) = geometry.and_then(|g| parse_geometry(g)).unwrap_or((0, 0));
             outputs.push(DisplayOutput {
                 name: tokens[0].to_string(),
-                primary: tokens.iter().any(|t| *t == "primary"),
+                primary: tokens.contains(&"primary"),
                 width,
                 height,
                 refresh_hz: 0.0,
@@ -715,12 +715,12 @@ fn finalize_outputs(mut outputs: Vec<DisplayOutput>) -> Vec<DisplayOutput> {
     outputs
 }
 
-fn matching_mode<'a>(
-    output: &'a DisplayOutput,
+fn matching_mode(
+    output: &DisplayOutput,
     width: u32,
     height: u32,
     refresh: f64,
-) -> Option<&'a DisplayMode> {
+) -> Option<&DisplayMode> {
     output
         .modes
         .iter()
@@ -959,10 +959,6 @@ pub fn invalidate_display_cache() {
     guard.info = None;
 }
 
-pub fn read_display_info() -> DisplayInfo {
-    read_display_info_inner()
-}
-
 fn read_display_info_inner() -> DisplayInfo {
     let adapter = detect_adapter();
     let (device, brightness, max) = read_brightness();
@@ -990,7 +986,7 @@ fn read_display_info_inner() -> DisplayInfo {
             parse_hypr(&t).ok_or_else(|| "failed to parse hyprctl output".to_string())
         }),
         "kde" => run("kscreen-doctor", &["-o"]).map(|t| parse_kde(&t)),
-        "gnome" => (|| {
+        "gnome" => {
             if crate::which("gdctl").is_some() {
                 gdctl_outputs()
             } else if crate::which("gnome-randr").is_some() {
@@ -998,7 +994,7 @@ fn read_display_info_inner() -> DisplayInfo {
             } else {
                 Err("install gdctl or gnome-randr for GNOME display control".into())
             }
-        })(),
+        }
         other => Err(format!("no display adapter for '{other}'")),
     };
     match result {
@@ -1126,7 +1122,7 @@ pub fn set_brightness(percent: u32) -> crate::SimpleResult {
             message: "backlight max_brightness unavailable".into(),
         };
     };
-    let raw = (max * percent as u32 / 100).max(if percent > 0 { 1 } else { 0 });
+    let raw = (max * percent / 100).max(if percent > 0 { 1 } else { 0 });
     let path = PathBuf::from("/sys/class/backlight")
         .join(&device)
         .join("brightness");

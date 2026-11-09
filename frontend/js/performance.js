@@ -3,7 +3,7 @@ import { $, invoke, run, toast, showModal } from "./core.js";
 import { switchTab } from "./tabs.js";
 
 let currentPresets = [];
-let activeModeKey = "balanced";
+let activeModeKey = "";
 
 export async function loadPerformance() {
   try {
@@ -13,21 +13,14 @@ export async function loadPerformance() {
     // Load GPU Mode label
     const gpu = await invoke("cmd_get_gpu_mode");
     if (gpu && $("perf-gpu-val")) {
-      $("perf-gpu-val").textContent = gpu.mode_label || "Hybrid (disarankan)";
+      $("perf-gpu-val").textContent = gpu.mode_label || "--";
     }
 
     // Load display refresh rate
     const disp = await invoke("cmd_get_display_info");
-    if (disp && disp.displays && disp.displays.length > 0) {
-      const primary = disp.displays[0];
-      const hz = Math.round(primary.current_refresh || 144);
-      if ($("perf-refresh-val")) $("perf-refresh-val").textContent = `Otomatis (${hz} Hz)`;
-    }
-
-    // Load overdrive state
-    const devSettings = await invoke("cmd_get_device_settings");
-    if (devSettings && $("perf-overdrive-val")) {
-      $("perf-overdrive-val").textContent = devSettings.overdrive ? "Aktif" : "Nonaktif";
+    const primary = disp?.outputs?.find((o) => o.primary) || disp?.outputs?.[0];
+    if (primary && $("perf-refresh-val")) {
+      $("perf-refresh-val").textContent = `${primary.current_resolution_label} · ${primary.current_refresh_label} Hz`;
     }
   } catch (err) {
     console.error("loadPerformance error:", err);
@@ -54,22 +47,20 @@ export function initPerformance() {
       const key = card.dataset.profile;
       if (!key) return;
 
+      const res = await run("cmd_apply_preset", { name: key });
+      if (!res) return;
+
       activeModeKey = key;
       document.querySelectorAll(".profile-card").forEach((c) => {
         c.classList.toggle("active", c.dataset.profile === key);
       });
 
-      // Update Featured Banner on Home immediately
       const matched = currentPresets.find((p) => p.key === key);
       if (matched) {
         if ($("dash-mode-title")) $("dash-mode-title").textContent = matched.label;
-        if ($("dash-mode-desc")) $("dash-mode-desc").textContent = matched.description;
+        if ($("dash-mode-desc")) $("dash-mode-desc").textContent = matched.description || "";
       }
-
-      const res = await run("cmd_apply_preset", { name: key }, `Mode ${key.toUpperCase()} diaktifkan.`);
-      if (res) {
-        toast(`Mode performa diubah ke ${key.toUpperCase()}`);
-      }
+      toast(`Mode performa diubah ke ${key.toUpperCase()}`);
     });
   });
 
@@ -78,46 +69,52 @@ export function initPerformance() {
     switchTab("gpu");
   });
 
-  // Additional settings: Refresh Rate row
+  // Additional settings: Refresh Rate row -> mode nyata dari compositor.
   $("row-perf-refresh")?.addEventListener("click", async () => {
     try {
       const disp = await invoke("cmd_get_display_info");
-      const current = disp?.displays?.[0]?.current_refresh || 144;
-      const targetHz = current > 100 ? 60 : 144;
-
+      const primary = disp?.outputs?.find((output) => output.primary) || disp?.outputs?.[0];
+      if (!primary) {
+        toast("Compositor tidak melaporkan output aktif.", true);
+        return;
+      }
+      const modes = [];
+      for (const group of primary.groups || []) {
+        for (const mode of group.modes || []) {
+          modes.push({ width: group.width, height: group.height, refresh: mode.refresh_hz, label: group.resolution_label, current: mode.current });
+        }
+      }
+      const options = modes
+        .map(
+          (mode) =>
+            `<button class="btn-${mode.current ? "secondary" : "primary"}" style="display:flex;justify-content:space-between;width:100%;margin-bottom:6px;padding:8px 12px;" data-display-mode="${mode.width}x${mode.height}@${mode.refresh}" ${mode.current ? "disabled" : ""}>
+               <span>${mode.label}</span><span class="mono">${mode.refresh} Hz${mode.current ? " · aktif" : ""}</span>
+             </button>`
+        )
+        .join("");
       showModal(
-        "Pilih Refresh Rate Layar",
-        `<p style="margin-bottom: 12px;">Pilih frekuensi refresh layar untuk menghemat baterai atau mendapatkan animasi ultra-halus.</p>
-         <div style="display: flex; gap: 10px; margin-top: 10px;">
-           <button class="btn-primary" id="btn-set-144" style="flex: 1;">144 Hz (Halus)</button>
-           <button class="btn-secondary" id="btn-set-60" style="flex: 1;">60 Hz (Hemat Daya)</button>
-         </div>`,
-        () => {}
+        `Mode Layar ${primary.name}`,
+        `<p style="margin-bottom:12px;">Pilih mode yang benar-benar dilaporkan compositor. Mode saat ini dinonaktifkan.</p>
+         <div style="max-height:320px;overflow-y:auto;">${options || '<p class="muted">Tidak ada mode yang dilaporkan.</p>'}</div>`,
+        null
       );
-
-      $("btn-set-144")?.addEventListener("click", async () => {
-        $("perf-refresh-val").textContent = "144 Hz";
-        toast("Refresh rate diatur ke 144 Hz");
-        $("app-modal").classList.remove("active");
-      });
-
-      $("btn-set-60")?.addEventListener("click", async () => {
-        $("perf-refresh-val").textContent = "60 Hz";
-        toast("Refresh rate diatur ke 60 Hz");
-        $("app-modal").classList.remove("active");
+      document.querySelectorAll("[data-display-mode]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const [size, refresh] = button.dataset.displayMode.split("@");
+          const [width, height] = size.split("x").map(Number);
+          const res = await run(
+            "cmd_set_display_mode",
+            { output: primary.name, width, height, refresh: Number(refresh) },
+            "Mode layar diterapkan."
+          );
+          if (res) {
+            $("app-modal").classList.remove("active");
+            await loadPerformance();
+          }
+        });
       });
     } catch (e) {
-      toast("Pengaturan refresh rate tidak tersedia", true);
+      toast(String(e), true);
     }
-  });
-
-  // Additional settings: Over Drive row
-  $("row-perf-overdrive")?.addEventListener("click", async () => {
-    const valEl = $("perf-overdrive-val");
-    const current = valEl?.textContent === "Aktif";
-    const next = !current;
-    if (valEl) valEl.textContent = next ? "Aktif" : "Nonaktif";
-    await run("cmd_set_device_setting", { key: "overdrive", value: next });
-    toast(`Over Drive ${next ? "diaktifkan (respons layar lebih cepat)" : "dinonaktifkan"}`);
   });
 }

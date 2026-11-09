@@ -38,6 +38,18 @@ no npm build step.
   `charge_types`, with fallbacks to `conservation_mode` and `charge_control_end_threshold`.
 - **Power limits** — firmware attributes discovered via sysfs; editable when the helper is
   installed, read-only otherwise.
+- **Resource automation** — closed-loop rules over real telemetry (CPU/GPU utilisation,
+  temperatures, GPU power/VRAM, fan RPM, battery, RAM). Rules support ANY/ALL conditions,
+  direction-aware hysteresis, cooldowns, and real actions: thermal profile, GPU power limit,
+  GPU runtime PM, fan auto/manual/curve, process renice, and desktop notifications.
+- **Safety and audit** — rules are validated in Rust with hard metric/action bounds before
+  they are persisted atomically (`0600`); invalid rules are dropped on load. Every executed
+  action is written to a local SQLite audit log with success/failure detail, and the UI reads
+  the same audit trail. Missing sensors never trigger actions.
+- **Settings backed by state** — startup behaviour, telemetry interval, desktop-notification
+  gating, real app/OS/helper information, CSV export, and scoped history removal are wired to
+  backend state. The frontend has no simulated telemetry or fake success paths: if the
+  backend is unavailable, the UI reports it instead of inventing values.
 - **Fan control** — RPM readout, manual PWM override, automatic mode, and temperature→PWM
   fan curves through the privileged helper.
 - **GPU mode switching** — `integrated` / `hybrid` / `nvidia` via `envycontrol`, then
@@ -66,13 +78,15 @@ src-tauri/
   src/gpu.rs         GPU mode detection and switching backends
   src/memory.rs      DIMM / VRAM summary
   src/keyboard.rs    ITE RGB HID reports and keyboard commands
-  src/fan.rs         fan safety, reset detection, profiles, curves
-  src/fan_control.rs fan IPC adapters
+  src/fan_control.rs fan safety, reset detection, curves, profiles, IPC adapters
   src/device.rs      device identity, battery health, dashboard score
   src/battery.rs     battery detail and charge threshold
   src/presets.rs     performance preset mapping
   src/display.rs     X11 / KDE / GNOME / sway / wlroots / Hyprland adapters
   src/diagnostics.rs health checks, smart scan, report export
+  src/resource_types.rs metric/action/rule model, thresholds and authoritative validation
+  src/resource_governor.rs telemetry ingestion, hysteresis engine, executor, rule persistence
+  src/db.rs          SQLite history, charge events, automation audit, retention and export
   src/gpu_ext.rs     NVIDIA details, power limit, runtime PM
   src/main.rs        entry point, --discover / --selftest
   src/bin/loq-helper.rs  privileged helper (fan, GPU switch, power limits, charging,

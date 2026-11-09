@@ -1463,6 +1463,22 @@ input:checked + .slider:before {
   cursor: pointer;
 }
 
+.settings-hint {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.audit-modal-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 /* Toast Alert Notification */
 .toast-notice {
   position: fixed;
@@ -1530,6 +1546,322 @@ input:checked + .slider:before {
   font-weight: 700;
   margin-bottom: 14px;
   color: var(--text-primary);
+}
+
+/* ==========================================================================
+   SCREEN 7: AUTOMATION ("Otomatisasi Sumber Daya")
+   ========================================================================== */
+.screen-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.automation-telemetry {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.automation-metric {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.automation-metric-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.automation-metric-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.15;
+}
+
+.automation-metric-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.automation-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.automation-rules-card,
+.automation-events-card,
+.automation-editor {
+  padding: 18px 20px;
+}
+
+.automation-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.automation-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.badge-soft {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: rgba(25, 201, 232, 0.12);
+  color: var(--cyan);
+  border: 1px solid rgba(25, 201, 232, 0.25);
+  white-space: nowrap;
+}
+
+.badge-soft.good {
+  background: rgba(39, 217, 149, 0.12);
+  color: var(--success);
+  border-color: rgba(39, 217, 149, 0.28);
+}
+
+.badge-soft.bad {
+  background: rgba(255, 101, 122, 0.12);
+  color: var(--error);
+  border-color: rgba(255, 101, 122, 0.3);
+}
+
+.rule-list,
+.event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 430px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.rule-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card-secondary);
+  transition: border-color 0.15s ease;
+}
+
+.rule-item:hover {
+  border-color: var(--border-card-bright);
+}
+
+.rule-item.disabled {
+  opacity: 0.62;
+}
+
+.rule-main {
+  min-width: 0;
+}
+
+.rule-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.rule-name {
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+
+.rule-meta {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.rule-error {
+  font-size: 10.5px;
+  color: var(--error);
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.rule-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-compact {
+  padding: 5px 10px;
+  font-size: 10.5px;
+  border-radius: 6px;
+}
+
+.btn-secondary.danger {
+  color: var(--error);
+  border-color: rgba(255, 101, 122, 0.35);
+}
+
+.btn-secondary.danger:hover {
+  background: rgba(255, 101, 122, 0.12);
+}
+
+.event-item {
+  padding: 10px 12px;
+  border-left: 3px solid var(--success);
+  border-radius: 6px;
+  background: var(--bg-card-secondary);
+}
+
+.event-item.error {
+  border-left-color: var(--error);
+}
+
+.event-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-primary);
+}
+
+.event-action {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  margin-top: 3px;
+}
+
+.event-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+.automation-empty {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  padding: 14px 2px;
+}
+
+.automation-editor {
+  margin-top: 16px;
+}
+
+.automation-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.automation-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.automation-field .settings-select {
+  width: 100%;
+}
+
+.automation-field-inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+}
+
+.automation-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+.automation-check input {
+  accent-color: var(--primary-blue);
+}
+
+.automation-subtitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin: 18px 0 10px;
+}
+
+.automation-conditions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.condition-row {
+  display: grid;
+  grid-template-columns: 1.35fr 1.05fr 0.85fr 0.85fr 0.85fr auto;
+  gap: 10px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card-secondary);
+}
+
+.automation-action-fields {
+  display: contents;
+}
+
+.automation-error {
+  min-height: 16px;
+  font-size: 11px;
+  color: var(--error);
+  margin-top: 10px;
+}
+
+.automation-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+@media (max-width: 1180px) {
+  .automation-grid {
+    grid-template-columns: 1fr;
+  }
+  .automation-telemetry {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .condition-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .condition-row .condition-remove {
+    grid-column: span 2;
+  }
 }
 
 /* Responsive adjustments */
